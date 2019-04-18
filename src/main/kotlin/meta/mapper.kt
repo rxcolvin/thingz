@@ -17,33 +17,4 @@ class EntityMapper<E : Any, E_ : Builder<E>>(
 )
 
 
-class Foo(
-    val name: String
-)
 
-class Foo_  (
-    var name: String = ""
-) : Builder<Foo> {
-    override fun create() = Foo(name)
-}
-
-
-object FooType {
-    val name = Field("name", StringType)
-    val type = EntityType<Foo>(
-        typeName = "Foo",
-        fields = listOf(name)
-    )
-}
-
-val fooMapper = EntityMapper<Foo, Foo_>(
-    fieldMappers = listOf(
-        FieldMapper<String, StringType, Foo, Foo_>(
-            field = FooType.name,
-            getter = {it.name},
-            getter_ = {it.name},
-            setter_ = {item, it -> item.name = it}
-        )
-    ),
-    builder = {Foo_()}
-)

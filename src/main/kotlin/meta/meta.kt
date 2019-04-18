@@ -31,6 +31,6 @@ fun main(args: Array<String>) {
 //
 //    val person = Person(name = "Fred", age = 10, email = Email("fred", domain = "blogs.com"))
 //
-//    dbMapper.put(person)
+//    dbMapper.create(person)
 }
 

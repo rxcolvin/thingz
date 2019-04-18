@@ -1,6 +1,7 @@
 package meta
 
 import lang.Email
+import java.util.*
 import kotlin.reflect.KClass
 
 interface Type<T: Any> {
@@ -64,14 +65,20 @@ object EmailType : AtomicType<Email> {
   override val typeName = "Email"
 }
 
+object UUIDType : AtomicType<UUID> {
+  override val tType = UUID::class
+  override val typeName = "UUID"
+}
+
 class Field<X:Any,T: Type<X>>(
   val fieldName: String,
   val type: T
 )
 
 
-class EntityType<E:Any>  (
+class EntityType<E:Any, K: Any>  (
     override val typeName: String,
+    val identityField: Field<K, out AtomicType<K>>,
     val fields: List<Field<*, *>>
 ): Type<E>
 

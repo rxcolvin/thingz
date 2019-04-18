@@ -1,6 +1,7 @@
 package sql
 
 import expression.*
+import logging.Logger
 
 
 interface SqlHelper {
@@ -9,16 +10,18 @@ interface SqlHelper {
 
     fun createTableSql(): String
 
+    fun dropTableSql(): String
+
     fun insertSql(): String
 
     fun updateSql(): String
 
     fun selectSql(
-        columnNames: List<String> = table.columnDefs.map {it.name},
+        columnNames: List<String> = table.allColumnDefs.map { it.name },
         where: Expr? = null,
         orderBy: List<OrderItem>? = null,
         paging: Paging? = null
-    ):  Pair<String, List<String>>
+    ): Pair<String, List<String>>
 
     fun deleteSql(
         where: Expr
@@ -27,7 +30,7 @@ interface SqlHelper {
     fun heartBeatSql(): String
 
     interface Factory {
-        fun create(table: Table) : SqlHelper
+        fun create(table: Table): SqlHelper
     }
 }
 
@@ -54,9 +57,11 @@ class ColumnDef<T : Any, ST : SqlType<T>>(
 open class Table(
     val schemaName: String,
     val tableName: String,
-    val columnDefs: List<ColumnDef<*, *>>
+    val columnDefs: List<ColumnDef<*, *>>,
+    val primaryColumnDefs: List<ColumnDef<*, *>> = emptyList()
 ) {
-    fun columnDef(name: String) = columnDefs.firstOrNull {it.name == name}
+    val allColumnDefs = primaryColumnDefs + columnDefs
+    fun columnDef(name: String) = allColumnDefs.firstOrNull { it.name == name }
 
 }
 
@@ -73,30 +78,44 @@ fun int(
 
 
 class GenericSqlHelper(
-    override val table: Table
+    override val table: Table,
+    val logger: Logger = Logger("Default", debugEnabled = true)
 ) : SqlHelper {
 
     override fun createTableSql(
-    ): String =
-        buildString {
-            append("CREATE TABLE ${table.tableName} (\n")
-            append(
-                table.columnDefs.map { it.toString() }.joinToString(prefix = "  ", separator = ",\n  ")
+    ): String = buildString {
+        with(table) {
+            appendln("CREATE TABLE ${tableName} (")
+            appendln(
+                ( (primaryColumnDefs+ columnDefs).map {
+                    it.toString()
+                } + if (primaryColumnDefs.any()) {
+                    "PRIMARY KEY (" +
+                            primaryColumnDefs.joinToString(separator = ",") { it.name } +
+                            ")"
+
+                } else "").joinToString(prefix = "  ", separator = ",\n  ")
             )
-            append("\n)")
+
+            append(")")
         }
+    }.debug { "createTableSql=$it" }
 
 
-    override fun insertSql(): String {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-    }
+    override fun dropTableSql() =
+        "DROP TABLE ${table.tableName} ".debug { "dropTableSql()=$it" }
 
-    override fun updateSql(): String {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-    }
+
+    override fun insertSql(): String =
+        ("INSERT INTO ${table.tableName} (${table.allColumnDefs.map { it.name }.joinToString(", ")}) " +
+                "VALUES (${table.allColumnDefs.map { "?" }.joinToString(", ")})")
+                    .debug { "insertSql()=$it" }
+
+    override fun updateSql(): String =
+        "UPDATE ".debug { "updateSql()=$it" }
 
     override fun selectSql(
-        columnNames: List<String> ,
+        columnNames: List<String>,
         where: Expr?,
         orderBy: List<OrderItem>?,
         paging: Paging?
@@ -128,6 +147,9 @@ class GenericSqlHelper(
                 append("  LIMIT ${paging.pageNo} ${paging.pageSize}")
             }
         }
+        logger.debug {
+            "selectSQL(columnNames=$columnNames, where=$where, orderBy=$orderBy, paging=$paging\n)=($sql, $parameters)"
+        }
         return Pair(sql, parameters.toList())
     }
 
@@ -143,21 +165,27 @@ class GenericSqlHelper(
         override fun create(table: Table): SqlHelper = GenericSqlHelper(table)
     }
 
+    private fun String.debug(s: (String) -> Any): String = logger.debug(this, s)
+
 }
 
 fun toSQL(
     test: Expr,
     parameters: MutableList<String>
-):  String {
+): String {
     val sql = when (test) {
         is Const<*> -> sqlize(test.value)
         is Field<*> -> test.id
-        is And -> test.exprs.map { toSQL(it, parameters) }.joinToString(prefix = "(", postfix = ")", separator = " AND ")
+        is And -> test.exprs.map { toSQL(it, parameters) }.joinToString(
+            prefix = "(",
+            postfix = ")",
+            separator = " AND "
+        )
         is Eq<*> -> {
             if (!test.left.isNull() && !test.right.isNull()) {
                 toSQL(test.left, parameters) + " = " + toSQL(test.right, parameters)
             } else if (!test.left.isNull() && test.right.isNull()) {
-                toSQL(test.left,parameters) + "IS NULL"
+                toSQL(test.left, parameters) + "IS NULL"
             } else if (test.left.isNull() && !test.right.isNull()) {
                 toSQL(test.right, parameters) + "IS NULL"
             } else {
@@ -191,7 +219,7 @@ fun toSQL(
             }
         }
         is Parameter<*> -> {
-           ":" + test.id
+            ":" + test.id
         }
         else -> "TODO"
     }
@@ -206,3 +234,7 @@ fun sqlize(v: Any?): String =
         else -> v.toString()
     }
 
+inline fun <T> T.runThis(block: T.() -> Unit): T {
+    block()
+    return this
+}

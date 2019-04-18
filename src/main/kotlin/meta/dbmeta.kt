@@ -4,6 +4,7 @@ import lang.Email
 import sql.ColumnDef
 import sql.int
 import sql.varchar
+import java.util.*
 
 //import lang.Email
 //import lang.T2
@@ -115,40 +116,49 @@ import sql.varchar
 //
 //
 
-class SqlEntityMeta<T: Any>(
-    val entityType: EntityType<T>,
+class SqlEntityMeta<T: Any, K: Any>(
+    val entityType: EntityType<T, K>,
     val fields: List<SqlFieldMeta<*, *>>,
-    val identityField: Field<*,*>
+    val identitySqlField: SqlFieldMeta<K, AtomicType<K>>
 ) {
-    val identitySqlField = fields.first { it.field === identityField }
+    val allFields = listOf(identitySqlField) + fields
 }
 
 class SqlFieldMeta<X:Any, T : Type<X>>(
-    val field: Field<X,T>,
+    val field: Field<X, T>,
     val toDbMap: (X) -> List<Pair<String, Any>>,
     val fromDbMap: (Map<String, Any>) -> X,
     val columnDefs: List<ColumnDef<*, *>>
 )
 
 
+
+
 fun sqlFieldMeta(field: Field<*, *>): SqlFieldMeta<*, *> {
     return when (field.type) {
         is StringType ->
-            SqlFieldMeta<String, StringType>(
+            SqlFieldMeta(
                 field = field as Field<String, StringType>,
                 toDbMap = { listOf(Pair(field.fieldName, it)) },
-                fromDbMap = { m -> m.get(field.fieldName) as String },
+                fromDbMap = { m -> m.get(field.fieldName.toUpperCase()) as String },
                 columnDefs = listOf(varchar(field.fieldName, 255))
             )
         is IntType ->
             SqlFieldMeta(
                 field = field as Field<Int, IntType>,
                 toDbMap = { listOf(Pair(field.fieldName, it)) },
-                fromDbMap = { m -> m.get(field.fieldName) as Int },
+                fromDbMap = { m -> m.get(field.fieldName.toUpperCase()) as Int },
                 columnDefs = listOf(int(field.fieldName))
             )
+        is UUIDType ->
+            SqlFieldMeta(
+                field = field as Field<UUID, UUIDType>,
+                toDbMap = { listOf(Pair(field.fieldName, it.toString())) },
+                fromDbMap = { m -> UUID.fromString(m.get(field.fieldName.toUpperCase()) as String) },
+                columnDefs = listOf(varchar(field.fieldName, length = 50))
+            )
         is EmailType -> {
-            val fieldName1 = field.fieldName + "_name"
+            val fieldName1 = field.fieldName + "_NAME"
             val fieldName2 = field.fieldName + "_domain"
             SqlFieldMeta<Email, EmailType>(
                 field = field as Field<Email, EmailType>,
@@ -160,8 +170,8 @@ fun sqlFieldMeta(field: Field<*, *>): SqlFieldMeta<*, *> {
                 },
                 fromDbMap = { m ->
                     Email(
-                        m.get(fieldName1) as String,
-                        m.get(fieldName2) as String
+                        m.get(fieldName1.toUpperCase()) as String,
+                        m.get(fieldName2.toUpperCase()) as String
                     )
                 },
                 columnDefs = listOf(

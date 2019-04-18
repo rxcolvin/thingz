@@ -7,17 +7,15 @@ import jdbc.Connection
 import meta.Builder
 import meta.EntityMapper
 import meta.SqlEntityMeta
-import sql.ColumnDef
+import query.QueryDef
 import sql.SqlHelper
-import sql.SqlType
 import sql.Table
 import storage.StorageManager
-import java.lang.Exception
 
 
-class JdbcStorageManager<K, E:Any, E_: Builder<E>>(
+class JdbcStorageManager<K: Any, E:Any, E_: Builder<E>>(
     val sqlHelperFactory: SqlHelper.Factory,
-    val sqlEntityMeta: SqlEntityMeta<E>,
+    val sqlEntityMeta: SqlEntityMeta<E, K>,
     val entityMapper: EntityMapper<E, E_>,
     val connection: Connection
 ) : StorageManager<K, E> {
@@ -25,12 +23,16 @@ class JdbcStorageManager<K, E:Any, E_: Builder<E>>(
         Table(
             tableName = sqlEntityMeta.entityType.typeName,
             schemaName = "",
-            columnDefs = sqlEntityMeta.fields.flatMap { it.columnDefs }
+            columnDefs = sqlEntityMeta.fields.flatMap { it.columnDefs },
+            primaryColumnDefs = sqlEntityMeta.identitySqlField.columnDefs
         )
     )
-    val insertStatement = connection.prepareStatement(
+    //Schema may not have been created deferred until first usage
+    val insertStatement by lazy { connection.prepareStatement(
         sqlHelper.insertSql()
-    )
+    )}
+
+    override fun describeSchema(): String = sqlHelper.createTableSql()
 
     override fun createSchema() {
         connection.prepareStatement(
@@ -38,17 +40,24 @@ class JdbcStorageManager<K, E:Any, E_: Builder<E>>(
         ).execute()
     }
 
+    override fun dropSchema() {
+        connection.prepareStatement(
+            sqlHelper.dropTableSql()
+        ).execute()
+    }
+
+    //TODO: Deal with Complex Keys
     override fun getById(id: K): E {
-        val sql = sqlHelper.selectSql(
+        val (sql, params) = sqlHelper.selectSql(
             where = Eq<K>(
                 Field(sqlEntityMeta.identitySqlField.columnDefs.first().name),
                 Parameter(sqlEntityMeta.identitySqlField.columnDefs.first().name)
             )
         )
-        val ps = connection.prepareStatement(sql.first)
-        val rs = ps.executeQuery(sql.second)
+        val ps = connection.prepareStatement(sql)
+        val rs = ps.executeQuery(listOf(sqlEntityMeta.identitySqlField.toDbMap(id)[0].second))
         val dbMap = rs.asMapSequence().firstOrNull() ?: throw Exception()
-        val entityMap = sqlEntityMeta.fields.map {
+        val entityMap = sqlEntityMeta.allFields.map {
             Pair(it.field.fieldName, it.fromDbMap(dbMap))
         }.toMap()
         val builder = entityMapper.builder()
@@ -56,14 +65,32 @@ class JdbcStorageManager<K, E:Any, E_: Builder<E>>(
         return builder.create()
     }
 
-    override fun put(item: E) {
+    override fun create(item: E) {
         val map = entityMapper.fieldMappers.map { Pair(it.field.fieldName, it.getter(item)) }.toMap()
-        val dbMap = sqlEntityMeta.fields.flatMap {
+        val dbMap = sqlEntityMeta.allFields.flatMap {
             (it.toDbMap as (Any?) -> List<Pair<String, Any>>)(map.getOrElse(it.field.fieldName) { throw Exception() })
         }.associate { it }
-        insertStatement.execute(sqlHelper.table.columnDefs.map { dbMap.getOrElse(it.name) { throw Exception() } })
+        insertStatement.execute(sqlHelper.table.allColumnDefs.map {
+            dbMap.getOrElse(it.name) {
+                throw Exception() }
+        })
     }
 
+    override fun update(item: E) {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
+
+    override fun query(filter: QueryDef): Sequence<E> {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
+
+    override fun deleteQuery(filter: QueryDef) {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
+
+    override fun deleteById(id: K) {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
 }
 
 
