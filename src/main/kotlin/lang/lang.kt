@@ -5,6 +5,10 @@ data class Email(
     val domain: String
 )
 
+data class JSON(
+    val json: String
+)
+
 
 interface Tuple {
   val arity: Int

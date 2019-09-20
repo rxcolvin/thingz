@@ -1,6 +1,7 @@
 package meta
 
 import lang.Email
+import lang.JSON
 import java.util.*
 import kotlin.reflect.KClass
 
@@ -65,6 +66,12 @@ object EmailType : AtomicType<Email> {
   override val typeName = "Email"
 }
 
+object JSONType : AtomicType<JSON> {
+  override val tType = JSON::class
+  override val typeName = "Json"
+}
+
+
 object UUIDType : AtomicType<UUID> {
   override val tType = UUID::class
   override val typeName = "UUID"
@@ -75,12 +82,18 @@ class Field<X:Any,T: Type<X>>(
   val type: T
 )
 
-
 class EntityType<E:Any, K: Any>  (
     override val typeName: String,
     val identityField: Field<K, out AtomicType<K>>,
     val fields: List<Field<*, *>>
 ): Type<E>
+
+open class ComplexType<E:Any>  (
+  override val typeName: String,
+  val fields: List<Field<*, *>>
+): Type<E> {
+  fun
+}
 
 interface EntityListType<E> : Type<List<E>> {
 

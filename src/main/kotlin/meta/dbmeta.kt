@@ -1,6 +1,9 @@
 package meta
 
 import lang.Email
+import lang.JSON
+import myapplication.Address
+import myapplication.AddressType
 import sql.ColumnDef
 import sql.int
 import sql.varchar
@@ -132,8 +135,6 @@ class SqlFieldMeta<X:Any, T : Type<X>>(
 )
 
 
-
-
 fun sqlFieldMeta(field: Field<*, *>): SqlFieldMeta<*, *> {
     return when (field.type) {
         is StringType ->
@@ -157,6 +158,13 @@ fun sqlFieldMeta(field: Field<*, *>): SqlFieldMeta<*, *> {
                 fromDbMap = { m -> UUID.fromString(m.get(field.fieldName.toUpperCase()) as String) },
                 columnDefs = listOf(varchar(field.fieldName, length = 50))
             )
+        is JSONType ->
+            SqlFieldMeta(
+                field = field as Field<JSON, JSONType>,
+                toDbMap = { listOf(Pair(field.fieldName, it.toString())) },
+                fromDbMap = { m -> JSON(m.get(field.fieldName.toUpperCase()) as String) },
+                columnDefs = listOf(varchar(field.fieldName, length = 50))
+            )
         is EmailType -> {
             val fieldName1 = field.fieldName + "_NAME"
             val fieldName2 = field.fieldName + "_domain"
@@ -178,10 +186,30 @@ fun sqlFieldMeta(field: Field<*, *>): SqlFieldMeta<*, *> {
                     varchar(fieldName1, 255),
                     varchar(fieldName2, 255)                    )
             )
-        }
 
+        }
+        is AddressType -> {
+            SqlFieldMeta(
+                field = field as Field<Address, AddressType>,
+                toDbMap = { listOf(Pair(field.fieldName, toJSon(it))) },
+                fromDbMap = { m -> UUID.fromString(m.get(field.fieldName.toUpperCase()) as String) },
+                columnDefs = listOf(varchar(field.fieldName, length = 50))
+            )
+
+        }
         else -> throw Exception()
     }
+}
+
+
+val json = Json(JsonConfiguration.Stable)
+
+fun toJSon(it: Any) : String {
+    return "x=y"
+}
+
+fun <T> fromJSon(json: String) : T {
+
 }
 
 
