@@ -4,77 +4,120 @@ import expression.Eq
 import expression.Field
 import expression.Parameter
 import jdbc.Connection
-import meta.Builder
-import meta.EntityMapper
-import meta.SqlEntityMeta
+import jdbc.DbMap
+import jdbc.DbValue
+import jdbc.PreparedStatement
+import meta.*
 import query.QueryDef
 import sql.SqlHelper
+import sql.SqlStatement
 import sql.Table
 import storage.StorageManager
 
 
-class JdbcStorageManager<K: Any, E:Any, E_: Builder<E>>(
-    val sqlHelperFactory: SqlHelper.Factory,
-    val sqlEntityMeta: SqlEntityMeta<E, K>,
-    val entityMapper: EntityMapper<E, E_>,
+
+//TODO: Replace
+class SimpleDbMapper<K : Any, E : Any, E_ : Any>(
+    schemaName: String,
+    val entityType: EntityType<E, E_, K>
+ )  {
+    private val sqlFieldMetas = entityType.fields.map { it to sqlFieldMeta(it) }
+    val table = Table(
+        tableName = entityType.typeName,
+        schemaName = schemaName,
+        columnDefs = columnDefsFromSqlFieldMetas(sqlFieldMetas.map { it.second })
+    )
+
+    fun fromMap(map: DbMap): E {
+        val builder = entityType.buildNew()
+        sqlFieldMetas.forEach {
+            //Ugly Cast Alert - is there a construct that can hide this better? A big switch that knows all the types
+            // perhaps as part of sqlFieldMeta
+            (it.first.setter_ as (E_, Any) -> Unit)(builder, it.second.fromDbMap(map))
+        }
+        return entityType.build(builder)
+    }
+
+    fun toMap(item: E): DbMap {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
+
+    val identityFieldName: String =
+        entityType.identityField.field.fieldName
+
+    fun identityValue(key: K): DbValue {
+        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    }
+}
+
+
+class SimpleJdbcStorageManager<K : Any, E : Any, E_ : Any>(
+    val dbMapper: SimpleDbMapper<K, E, E_>,
+    val sqlHelper: SqlHelper,
     val connection: Connection
 ) : StorageManager<K, E> {
-    val sqlHelper = sqlHelperFactory.create(
-        Table(
-            tableName = sqlEntityMeta.entityType.typeName,
-            schemaName = "",
-            columnDefs = sqlEntityMeta.fields.flatMap { it.columnDefs },
-            primaryColumnDefs = sqlEntityMeta.identitySqlField.columnDefs
+
+    inner class PreparedStatementHolder(
+        val sqlStatement: SqlStatement
+    ) {
+        val preparedStatement by lazy {
+            connection.prepareStatement(sqlStatement.sql)
+        }
+
+        fun execute(dbMap: DbMap) =
+            preparedStatement.execute(sqlStatement.parameters.map { dbMap.getOrElse(it, { throw Exception() }) })
+
+
+        fun executeQuery(dbMap: DbMap): Sequence<DbMap> =
+            preparedStatement.executeQuery(sqlStatement.parameters.map {
+                dbMap.getOrElse(
+                    it,
+                    { throw Exception() })
+            }).asMapSequence()
+    }
+
+
+    //Schema may not have been created deferred until first usage
+    val insertStatement = PreparedStatementHolder(
+        sqlHelper.insertSql(dbMapper.table)
+    )
+
+    val getByIdStatement = PreparedStatementHolder(
+        sqlHelper.selectSql(
+            table = dbMapper.table,
+            where = Eq<K>(
+                Field(dbMapper.identityFieldName),
+                Parameter(dbMapper.identityFieldName)
+            )
         )
     )
-    //Schema may not have been created deferred until first usage
-    val insertStatement by lazy { connection.prepareStatement(
-        sqlHelper.insertSql()
-    )}
 
-    override fun describeSchema(): String = sqlHelper.createTableSql()
+
+    override fun describeSchema(): String = "???"
 
     override fun createSchema() {
         connection.prepareStatement(
-            sqlHelper.createTableSql()
+            sqlHelper.createTableSql(dbMapper.table).sql
         ).execute()
     }
 
     override fun dropSchema() {
         connection.prepareStatement(
-            sqlHelper.dropTableSql()
+            sqlHelper.dropTableSql(dbMapper.table).sql
         ).execute()
     }
 
     //TODO: Deal with Complex Keys
-    override fun getById(id: K): E {
-        val (sql, params) = sqlHelper.selectSql(
-            where = Eq<K>(
-                Field(sqlEntityMeta.identitySqlField.columnDefs.first().name),
-                Parameter(sqlEntityMeta.identitySqlField.columnDefs.first().name)
-            )
+    override fun getById(id: K): E =
+        dbMapper.fromMap(
+            getByIdStatement.executeQuery(
+                mapOf(dbMapper.identityFieldName to dbMapper.identityValue(id))
+            ).firstOrNull() ?: throw Exception()
         )
-        val ps = connection.prepareStatement(sql)
-        val rs = ps.executeQuery(listOf(sqlEntityMeta.identitySqlField.toDbMap(id)[0].second))
-        val dbMap = rs.asMapSequence().firstOrNull() ?: throw Exception()
-        val entityMap = sqlEntityMeta.allFields.map {
-            Pair(it.field.fieldName, it.fromDbMap(dbMap))
-        }.toMap()
-        val builder = entityMapper.builder()
-        entityMapper.fieldMappers.forEach { (it.setter_ as (E_, Any?)->Unit)(builder, entityMap[it.field.fieldName]) }
-        return builder.create()
-    }
 
-    override fun create(item: E) {
-        val map = entityMapper.fieldMappers.map { Pair(it.field.fieldName, it.getter(item)) }.toMap()
-        val dbMap = sqlEntityMeta.allFields.flatMap {
-            (it.toDbMap as (Any?) -> List<Pair<String, Any>>)(map.getOrElse(it.field.fieldName) { throw Exception() })
-        }.associate { it }
-        insertStatement.execute(sqlHelper.table.allColumnDefs.map {
-            dbMap.getOrElse(it.name) {
-                throw Exception() }
-        })
-    }
+
+    override fun create(item: E) =
+        insertStatement.execute(dbMapper.toMap(item))
 
     override fun update(item: E) {
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
@@ -91,7 +134,16 @@ class JdbcStorageManager<K: Any, E:Any, E_: Builder<E>>(
     override fun deleteById(id: K) {
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
+
+
 }
+
+
+
+
+
+
+
 
 
 

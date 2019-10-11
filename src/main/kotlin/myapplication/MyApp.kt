@@ -1,14 +1,14 @@
 package myapplication
 
-import expression.Const
-import expression.Eq
-import expression.Parameter
 import jdbc.DriverManager
-import jdbcstorage.JdbcStorageManager
+import jdbcstorage.SimpleDbMapper
+import jdbcstorage.SimpleJdbcStorageManager
 import lang.Email
 import meta.*
 import sql.GenericSqlHelper
 import java.util.*
+
+val nullUUID = UUID.fromString("THISISNOTAUUIIDASDASD")
 
 data class Address(
     val houseName: String
@@ -16,8 +16,11 @@ data class Address(
 
 data class Address_(
     var houseName: String
-) : Builder<Address> {
-    override fun create() = Address(houseName =this.houseName)
+) {
+    constructor() : this("")
+    constructor(it: Address) : this(it.houseName)
+
+    fun create() = Address(houseName = this.houseName)
 }
 
 data class Person(
@@ -33,17 +36,23 @@ data class Person_(
     var name: String,
     var age: Int,
     var email: Email,
-    var address: Address
-) : Builder<Person> {
-    override fun create() = Person(
+    var address: Address_
+) {
+    constructor() : this(
+        nullUUID,
+        "", 0, Email(), Address_()
+    )
+
+    constructor(it: Person) : this(it.uuid, it.name, it.age, it.email, Address_(it.address))
+
+    fun create() = Person(
         uuid = uuid,
         name = this.name,
         age = this.age,
         email = this.email,
-        address = this.address
+        address = this.address.create()
     )
 }
-
 
 
 object DataDictionary {
@@ -57,27 +66,64 @@ val uuidField = Field("uuid", UUIDType)
 
 val houseName = Field("houseName", StringType)
 
-object AddressType:  ComplexType<Address> (
+val AddressType = ComplexType(
     typeName = "address",
     fields = listOf(
-        houseName
-    )
+        EntityField(
+            field = houseName,
+            getter = { it.houseName },
+            getter_ = { it.houseName },
+            setter_ = { x, it -> x.houseName = it }
+        )
+    ),
+    buildNew = { Address_() },
+    buildCopy = { Address_(it) },
+    build = { it.create() }
 )
 
 val addressField = Field("address", AddressType)
 
-val personType = EntityType<Person, UUID>(
+val PersonType = EntityType(
     typeName = "Person",
-    fields = listOf(
-        nameField,
-        ageField,
-        emailField,
-        addressField
-
+    identityField = EntityAtomicField(
+        field = uuidField,
+        getter = { it.uuid },
+        setter_ = { x: Person_, it -> x.uuid = it },
+        getter_ = { it.uuid },
+        isKey = true,
+        isSearchable = true
     ),
-    identityField = uuidField
-)
+    fields = listOf(
+        EntityAtomicField(
+            field = nameField,
+            getter = { it.name },
+            setter_ = { x, it -> x.name = it },
+            getter_ = { it.name }
+        ),
+        EntityAtomicField(
+            field = ageField,
+            getter = { it.age },
+            setter_ = { x, it -> x.age = it },
+            getter_ = { it.age }
+        ),
+        EntityAtomicField(
+            field = emailField,
+            getter = { it.email },
+            setter_ = { x, it -> x.email = it },
+            getter_ = { it.email }
+        ),
+        EntityComplexField(
+            field = addressField,
+            getter = { it.address },
+            setter_ = { x, it -> x.address = Address_(it) },
+            getter_ = { it.address.create() }
+        )
+    ),
+    buildNew = { Person_() },
+    buildCopy = { Person_(it) },
+    build = { it.create() }
 
+)
 
 
 fun main() {
@@ -87,80 +133,22 @@ fun main() {
 
     try {
 
-        val personSqlEntityMeta = SqlEntityMeta<Person, UUID>(
-            entityType = personType,
-            fields = personType.fields.map { sqlFieldMeta(it) },
-            identitySqlField = sqlFieldMeta(personType.identityField) as SqlFieldMeta<UUID, AtomicType<UUID>>
-        )
-
-        val personEntityMapper = EntityMapper<Person, Person_>(
-            fieldMappers = listOf(
-                FieldMapper(
-                    field = uuidField,
-                    getter = { it.uuid },
-                    setter_ = { x, it -> x.uuid = it },
-                    getter_ = { it.uuid }
-                ),
-                FieldMapper(
-                    field = nameField,
-                    getter = { it.name },
-                    setter_ = { x, it -> x.name = it },
-                    getter_ = { it.name }
-                ),
-                FieldMapper(
-                    field = ageField,
-                    getter = { it.age },
-                    setter_ = { x, it -> x.age = it },
-                    getter_ = { it.age }
-                ),
-                FieldMapper(
-                    field = emailField,
-                    getter = { it.email },
-                    setter_ = { x, it -> x.email = it },
-                    getter_ = { it.email }
-                ),
-                FieldMapper(
-                    field = addressField,
-                    getter = { it.address },
-                    setter_ = { x, it -> x.address = it },
-                    getter_ = { it.address }
-
-                )
-
-            ),
-            builder = {
-                Person_(
-                    uuid = UUID.randomUUID(),
-                    name = "",
-                    age = 0,
-                    email = Email("", ""),
-                    address = Address("")
-                )
-            }
-        )
 
         Class.forName("org.apache.derby.jdbc.EmbeddedDriver")
         val cxn = DriverManager.getConnection("jdbc:derby:/derbydatabases/testone;create=true")
 
-        val storageManager = JdbcStorageManager<UUID, Person, Person_>(
-            sqlHelperFactory = GenericSqlHelper.Factory,
-            sqlEntityMeta = personSqlEntityMeta,
-            entityMapper = personEntityMapper,
-            connection = cxn
-        )
-
-        storageManager.describeSchema()
-        storageManager.sqlHelper.insertSql()
-
-        storageManager.sqlHelper.selectSql(
-            where = Eq(
-                Parameter("name"), Const("Bob")
-            )
+        val storageManager = SimpleJdbcStorageManager<UUID, Person, Person_>(
+            connection = cxn,
+            dbMapper = SimpleDbMapper(
+                schemaName = "",
+                entityType = PersonType
+            ),
+            sqlHelper = GenericSqlHelper()
         )
 
         try {
             storageManager.dropSchema()
-        } catch (ex:Exception) {
+        } catch (ex: Exception) {
 
         }
         storageManager.createSchema()

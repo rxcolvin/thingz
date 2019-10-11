@@ -3,7 +3,9 @@ package lang
 data class Email(
     val name: String,
     val domain: String
-)
+) {
+    constructor() : this("","")
+}
 
 data class JSON(
     val json: String

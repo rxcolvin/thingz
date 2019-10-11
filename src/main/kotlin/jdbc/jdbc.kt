@@ -5,19 +5,40 @@ import java.sql.Driver as JdbcDriver
 import java.sql.DriverManager as JdbcDriverManager
 import java.sql.PreparedStatement as JdbcPreparedStatement
 import java.sql.ResultSet as JdbcResultSet
+typealias ColName = String
+typealias DbMap = Map<ColName, DbValue>
+typealias DbMapBuilder = MutableMap<ColName, DbValue>
 
+class DbValue private constructor(
+    val value: Any?
+) {
+    constructor(value: String?) : this(value as Any?)
+    constructor(value: Int?) : this(value as Any?)
+    constructor() : this(null as Any?)
+
+    fun asString() = value as String?
+    fun asInt() = value as Int?
+}
+
+fun dbValue(value: Any?)  = when(value){
+    is String -> DbValue(value)
+    is Int -> DbValue(value)
+    else -> throw Exception()
+}
 
 interface Connection {
     fun prepareStatement(sql: String): PreparedStatement
 }
 
 interface ResultSet {
-    fun asMapSequence(): Sequence<Map<String, Any>>
+    fun asMapSequence(): Sequence<DbMap>
+    fun asMap() : DbMap?
 }
 
 interface PreparedStatement {
-    fun executeQuery(values: List<Any>): ResultSet
-    fun execute(values: List<*> = emptyList<Any>()): Unit
+    fun executeQuery(values: List<DbValue>) : ResultSet
+    fun executeQuery(value: DbValue) : ResultSet
+    fun execute(values: List<DbValue> = emptyList())
 }
 
 interface Driver {
@@ -57,29 +78,23 @@ class ConnectionImpl(
 class ResultSetImpl(
     private val jdbcResultSet: JdbcResultSet
 ) : ResultSet {
-    override fun asMapSequence(): Sequence<Map<String, Any>> =
-            ResultSetMapSequence(jdbcResultSet)
-}
+    override fun asMapSequence(): Sequence<DbMap> =
+            ResultSetMapIterator(jdbcResultSet).asSequence()
 
-class ResultSetMapSequence (
-    private val jdbcResultSet: JdbcResultSet
-): Sequence<Map<String, Any>> {
-    override fun iterator(): Iterator<Map<String, Any>> =
-            ResultSetMapIterator(jdbcResultSet)
-
+    override fun asMap(): DbMap? = asMapSequence().firstOrNull()
 }
 
 class ResultSetMapIterator(
     val jdbcResultSet: JdbcResultSet
-) : Iterator<Map<String, Any>> {
+) : Iterator<DbMap> {
 
     val colNames = columnsNames(jdbcResultSet)
 
     override fun hasNext(): Boolean = jdbcResultSet.next()
 
 
-    override fun next(): Map<String, Any> =
-        colNames.mapIndexed { index, it -> it to jdbcResultSet.getObject(index + 1) }.associate { it }
+    override fun next(): DbMap =
+        colNames.mapIndexed { index, it -> it to dbValue(jdbcResultSet.getObject(index + 1)) }.associate { it }
 
 }
 
@@ -94,16 +109,18 @@ private fun columnsNames(jdbcResultSet: JdbcResultSet): List<String> {
 class PreparedStatementImpl(
     val jdbcPreparedStatement: JdbcPreparedStatement
 ) : PreparedStatement {
-    override fun executeQuery(values: List<Any>): ResultSet {
-        values.forEachIndexed { i, it ->
-            jdbcPreparedStatement.setObject(i + 1, values[i])
+    override fun executeQuery(values: List<DbValue>): ResultSet {
+        values.forEachIndexed { i, _ ->
+            jdbcPreparedStatement.setObject(i + 1, values[i].value)
         }
         return ResultSetImpl(jdbcPreparedStatement.executeQuery())
     }
 
-    override fun execute(values: List<*>) {
-        values.forEachIndexed { i, it ->
-            jdbcPreparedStatement.setObject(i + 1, values[i])
+    override fun executeQuery(value: DbValue) = executeQuery(listOf(value))
+
+    override fun execute(values: List<DbValue>) {
+        values.forEachIndexed { i, _ ->
+            jdbcPreparedStatement.setObject(i + 1, values[i].value)
         }
         jdbcPreparedStatement.execute()
     }
