@@ -24,6 +24,7 @@ class SqlFieldMeta<X : Any, T : Type<X>>(
 fun columnDefsFromSqlFieldMetas(sqlFieldMetas: List<SqlFieldMeta<*, *>>) = sqlFieldMetas.flatMap { it.columnDefs }
 
 
+
 fun  <E:Any, E_:Any> sqlFieldMeta(entityField: EntityField<E, E_, *,*>): SqlFieldMeta<*, *> =
     if (entityField is EntityAtomicField) {
         val field = entityField.field
