@@ -1,13 +1,13 @@
 package jdbc
 
+import sql.ColName
 import java.sql.Connection as JdbcConnection
 import java.sql.Driver as JdbcDriver
 import java.sql.DriverManager as JdbcDriverManager
 import java.sql.PreparedStatement as JdbcPreparedStatement
 import java.sql.ResultSet as JdbcResultSet
-typealias ColName = String
 typealias DbMap = Map<ColName, DbValue>
-typealias DbMapBuilder = MutableMap<ColName, DbValue>
+typealias DbMapBuilder = HashMap<ColName, DbValue>
 
 class DbValue private constructor(
     val value: Any?

@@ -1,14 +1,13 @@
 package myapplication
 
 import jdbc.DriverManager
-import jdbcstorage.SimpleDbMapper
 import jdbcstorage.SimpleJdbcStorageManager
 import lang.Email
 import meta.*
-import sql.GenericSqlHelper
+import sql.DerbySqlHelper
 import java.util.*
 
-val nullUUID = UUID.fromString("THISISNOTAUUIIDASDASD")
+val nullUUID = UUID.randomUUID()
 
 data class Address(
     val houseName: String
@@ -137,19 +136,20 @@ fun main() {
         Class.forName("org.apache.derby.jdbc.EmbeddedDriver")
         val cxn = DriverManager.getConnection("jdbc:derby:/derbydatabases/testone;create=true")
 
-        val storageManager = SimpleJdbcStorageManager<UUID, Person, Person_>(
+        val storageManager = SimpleJdbcStorageManager(
             connection = cxn,
-            dbMapper = SimpleDbMapper(
-                schemaName = "",
-                entityType = PersonType
-            ),
-            sqlHelper = GenericSqlHelper()
+            entityType = PersonType,
+            sqlHelper = DerbySqlHelper(),
+            schemaName = ""
         )
 
-        try {
-            storageManager.dropSchema()
-        } catch (ex: Exception) {
+        println(storageManager.createStatement.sqlStatement.sql)
+        println(storageManager.getByIdStatement.sqlStatement.sql)
 
+        try {
+            storageManager.dropSchema(false)
+        } catch (ex: Exception) {
+            println(ex)
         }
         storageManager.createSchema()
         val person = Person(

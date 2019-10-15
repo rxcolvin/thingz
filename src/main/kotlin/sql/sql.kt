@@ -1,8 +1,50 @@
 package sql
 
 import expression.*
-import jdbc.ColName
-import logging.Logger
+import java.sql.SQLNonTransientException
+
+typealias ColName = String
+
+sealed class SqlType
+
+
+class VARCHAR (
+    val length: Int
+) : SqlType() {
+}
+
+object INTEGER : SqlType()
+
+
+enum class Constraint {
+    UNIQUE, NOTNULL
+}
+
+enum class Primary(val order:Int = 0) {
+    NONE(0), FIRST(1), SECOND(2)
+}
+
+fun varchar(
+    name: String,
+    length: Int,
+    constraint: Constraint = Constraint.NOTNULL,
+    isPrimary: Primary = Primary.NONE
+) = ColumnDef(
+    name = name.toUpperCase(),
+    type= VARCHAR(length),
+    constraint = constraint,
+    isPrimary = isPrimary
+)
+
+fun int(
+    name: String,
+    constraint: Constraint =  Constraint.NOTNULL
+) = ColumnDef(
+    name = name.toUpperCase(),
+    type = INTEGER,
+    constraint = constraint
+)
+
 
 class SqlStatement(
     val sql: String,
@@ -36,11 +78,16 @@ interface SqlHelper {
         table: Table
     ): SqlStatement
 
+    fun validateDropTableException(
+        table: Table,
+        ex: SQLNonTransientException
+    ) : Boolean
+
 }
 
 
 class OrderItem(
-    val column: ColumnDef<*, *>,
+    val column: ColumnDef,
     val isDesc: Boolean = true
 )
 
@@ -50,134 +97,26 @@ class Paging(
 )
 
 
-class ColumnDef<T : Any, ST : SqlType<T>>(
+class ColumnDef(
     val name: String,
-    val type: ST,
     val constraint: Constraint,
-    val isPrimary: Boolean = false
-) {
-    override fun toString(): String = name + " " + type + " " + constraint
-}
+    val type: SqlType,
+    val isPrimary: Primary = Primary.NONE
+)
 
 open class Table(
     val schemaName: String,
     val tableName: String,
-    val columnDefs: List<ColumnDef<*, *>>
+    val columnDefs: List<ColumnDef>
 ) {
-    fun columnDef(name: ColName): ColumnDef<*,*>? = columnDefs.firstOrNull { it.name == name }
+    fun columnDef(name: ColName): ColumnDef? = columnDefs.firstOrNull { it.name == name }
 
 }
 
-fun varchar(
-    name: String,
-    length: Int,
-    constraint: Constraint = NOTNULL,
-    isPrimary: Boolean = false
-) = ColumnDef(name, Varchar(length), constraint, isPrimary)
-
-fun int(
-    name: String,
-    constraint: Constraint = NOTNULL
-) = ColumnDef(name, INTEGER, constraint)
 
 
-class GenericSqlHelper(
-    val logger: Logger = Logger("Default", debugEnabled = true)
-) : SqlHelper {
+abstract class AbstractSqlHelper() : SqlHelper
 
-    override fun createTableSql(
-        table: Table
-
-    ): SqlStatement {
-
-        val listBuilder = mutableListOf<String>()
-
-        val sql = buildString {
-            with(table) {
-                appendln("CREATE TABLE ${tableName} (")
-                appendln(
-                    columnDefs.map {
-                        it.toString()
-                    } .joinToString(prefix = "  ", separator = ",\n  ")
-                )
-                append(")")
-            }
-        }
-        return SqlStatement(sql, emptyList())
-    }
-
-    override fun dropTableSql(
-        table: Table
-    ) =
-        SqlStatement("DROP TABLE ${table.tableName}")
-
-
-    override fun insertSql(
-        table: Table
-    ): SqlStatement {
-        val sql = ("INSERT INTO ${table.tableName} (${table.columnDefs.map { it.name }.joinToString(", ")}) " +
-                "VALUES (${table.columnDefs.map { "?" }.joinToString(", ")})")
-        return SqlStatement(sql, table.columnDefs.map{it.name})
-    }
-
-    override fun updateSql(
-        table: Table
-    ): SqlStatement {
-        val sql = "UPDATE "
-        return SqlStatement(sql, table.columnDefs.map{it.name})
-    }
-
-    override fun selectSql(
-        table: Table,
-        columnNames: List<ColName>,
-        where: Expr?,
-        orderBy: List<OrderItem>?,
-        paging: Paging?
-    ): SqlStatement {
-
-        val parameters = mutableListOf<String>()
-        val columnDefs = columnNames.map {
-            table.columnDef(it) ?: throw Exception()
-        }
-
-        val sql = buildString {
-            append("SELECT\n")
-            append(
-                "  " + columnDefs.map { it.name }.joinToString(", ")
-            )
-            append("\nFROM")
-            append("  ${table.tableName} \n")
-            if (where != null || paging != null) {
-                append("WHERE\n")
-            }
-            if (where != null) {
-                append("  " + toSQL(where, parameters) + "\n")
-            }
-            if (orderBy != null) {
-                append(" ORDER BY ")
-                orderBy.map { it.column.name + if (it.isDesc) "DESC" else "ASC" }
-            }
-            if (paging != null) {
-                append("  LIMIT ${paging.pageNo} ${paging.pageSize}")
-            }
-        }
-        logger.debug {
-            "selectSQL(columnNames=$columnNames, where=$where, orderBy=$orderBy, paging=$paging\n)=($sql, $parameters)"
-        }
-        return SqlStatement(sql, parameters.toList())
-    }
-
-    override fun deleteSql(
-        table: Table,
-        where: Expr
-    ) = SqlStatement("TODO")
-
-    override fun heartBeatSql(
-        table: Table
-    )= SqlStatement("TODO")
-
-
-}
 
 fun toSQL(
     test: Expr,

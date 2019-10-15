@@ -1,23 +1,10 @@
 package json
 
-import kotlinx.io.core.Output
-import kotlinx.io.core.writeText
-import kotlinx.io.streams.asOutput
-import meta.JSONType
 
 class JsonMap
 class JsonList
 
-class JsonValue private constructor(private val value: Any?, val type: JsonValueType) {
-    fun asString(): String = if (value == null) "null" else value.toString()
 
-    constructor(stringValue: CharSequence) : this(stringValue as Any, JsonValueType.STRING)
-    constructor(numberValue: Number) : this(numberValue as Any,JsonValueType.NUMBER)
-    constructor(booleanValue: Boolean) : this(booleanValue as Any, JsonValueType.BOOLEAN)
-    constructor(mapValue: JsonMap) : this(mapValue as Any, JsonValueType.MAP)
-    constructor(listValue: JsonList) : this(listValue as Any, JsonValueType.LIST)
-    constructor() : this(null, JsonValueType.NULL)
-}
 
 enum class JsonValueType {
     STRING {
@@ -49,9 +36,9 @@ interface TokenDeserializer {
     fun openList()
     fun closeList()
     fun key(): String
-    fun atomicValue(): JsonValue
+    fun atomicValue(): Any?
     fun valueType(): JsonValueType
-    fun value(): JsonValue
+    fun value(): Any?
     fun separator()
 }
 
@@ -61,64 +48,68 @@ interface TokenSerializer {
     fun openList()
     fun closeList()
     fun key(name: String)
-    fun atomicValue(value: JsonValue)
-    fun separator()
+    fun atomicValue(value: Any?)
+    fun listSeperator()
+    fun mapSeparator()
+    fun asString(): String
 }
 
+
 class JsonTokenSerializer(
-    private val output: Output
 ) : TokenSerializer {
+    private val builder = StringBuilder()
+
     private fun space() {
 
     }
 
     private fun quotize(text: CharSequence) {
-        output.writeText("\"")
-        output.writeText(text)
-        output.writeText("\"")
-    }
-
-    override fun openMap() {
-        output.writeText("{")
-    }
-
-    override fun closeMap() {
-        output.writeText("}")
-    }
-
-    override fun openList() {
-        output.writeText("[")
-    }
-
-    override fun closeList() {
-        output.writeText("]")
-    }
-
-    override fun key(name: String) {
-        output.writeText("")
-    }
-
-    override fun atomicValue(value: JsonValue) {
-        when (value.type) {
-            JsonValueType.STRING -> quotize(value.asString())
-            JsonValueType.BOOLEAN, JsonValueType.NUMBER, JsonValueType.NULL -> value.asString()
-            else -> throw Exception("Not Atomic Type")
+        with(builder) {
+            append('"')
+            append(text)
+            append('"')
         }
     }
 
-    override fun separator() {
-        output.writeText(",")
+    override fun openMap() {
+        builder.append("{")
     }
+
+    override fun closeMap() {
+        builder.append("}")
+    }
+
+    override fun openList() {
+        builder.append("[")
+    }
+
+    override fun closeList() {
+        builder.append("]")
+    }
+
+    override fun key(name: String) {
+        quotize(name)
+    }
+
+    override fun atomicValue(value: Any?) {
+        when (value) {
+            is String -> quotize(value)
+            is Number, Boolean -> builder.append(value.toString())
+            else -> throw Exception("Not Atomic JSON Type")
+        }
+    }
+
+    override fun listSeperator() {
+        builder.append(", ")
+    }
+
+    override fun mapSeparator() {
+        builder.append(":")
+    }
+
+
+    override fun asString(): String = builder.toString()
 }
 
 
-fun main() {
-    val output = System.out.asOutput()
-
-    val serializer = JsonTokenSerializer(output)
-
-    serializer.openMap()
-    serializer.closeMap()
-    output.flush()
-}
 

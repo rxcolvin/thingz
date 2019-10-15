@@ -15,10 +15,10 @@ object FooTable {
         tableName = "Foo",
         schemaName = "",
         columnDefs = listOf(
-            varchar(name, 10, NOTNULL),
-            varchar(foo, 10, NOTNULL),
-            int(age, NOTNULL),
-            int(bar, NOTNULL)
+            varchar(name, 10, Constraint.NOTNULL, Primary.FIRST),
+            varchar(foo, 10, Constraint.NOTNULL, Primary.SECOND),
+            int(age, Constraint.NOTNULL),
+            int(bar, Constraint.NOTNULL)
         )
     )
 }
@@ -26,14 +26,14 @@ object FooTable {
 class Tests {
     @Test
     fun `Generate SQL to create table`() {
-        val target = GenericSqlHelper()
+        val target = DerbySqlHelper()
         val sql = target.createTableSql(FooTable.it)
         println(sql.sql)
     }
 
     @Test
     fun `Select SQL `() {
-        val target = GenericSqlHelper()
+        val target = DerbySqlHelper()
         val res = target.selectSql(
             table = FooTable.it,
             where = expression.And(
@@ -44,7 +44,5 @@ class Tests {
                 )
             )
         )
-
     }
-
 }

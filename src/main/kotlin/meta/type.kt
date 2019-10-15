@@ -1,8 +1,6 @@
 package meta
 
 import lang.Email
-import lang.JSON
-import logging.configToLogger
 import java.util.*
 import kotlin.reflect.KClass
 
@@ -15,13 +13,14 @@ enum class AtomicJsonType {
 
 }
 
-class  AtomicType<T : Any> (
+
+class AtomicType<T : Any, J>(
     override val typeName: String,
     val tType: KClass<T>,
-    val jsonType: AtomicJsonType,
-    val asString : (T) -> String,
-    val fromString: (String) -> T
-
+    val asString: (T) -> String,
+    val fromString: (String) -> T,
+    val fromJson: (jsonValue: J) -> T,
+    val toJson: (value: T) -> J
 ) : Type<T> {
 
 }
@@ -36,8 +35,8 @@ interface AtomicListType<T> : Type<List<T>> {
 
 
 interface AtomicMapType<K : Any, E : Any> : Type<Map<K, E>> {
-    val keyType: AtomicType<K>
-    val valueType: AtomicType<E>
+    val keyType: AtomicType<K, *>
+    val valueType: AtomicType<E, *>
 }
 
 //interface ComplexMapType: Type
@@ -67,49 +66,60 @@ interface AtomicMapType<K : Any, E : Any> : Type<Map<K, E>> {
 //}
 
 
-val StringType = AtomicType(
+val StringType = AtomicType<String, String>(
     typeName = "String",
     tType = String::class,
-    asString = {it},
-    fromString = {it},
-    jsonType =  AtomicJsonType.STRING
+    asString = { it },
+    fromString = { it },
+    fromJson = { it },
+    toJson = { it }
 )
 
 
-val IntType = AtomicType(
+val IntType = AtomicType<Int, Number>(
     typeName = "Int",
     tType = Int::class,
-    asString = {it.toString()},
-    fromString = {it.toInt()
-    },
-    jsonType =  AtomicJsonType.STRING
+    asString = { it.toString() },
+    fromString = { it.toInt() },
+    fromJson = { it.toInt() },
+    toJson = { it }
 )
 
-val EmailType = AtomicType(
+
+val EmailType = AtomicType<Email, String>(
     typeName = "Email",
     tType = Email::class,
-    asString = {it.toString()},
+    asString = { it.toString() },
     fromString = {
         val ss = it.split(Regex("@"), 2)
         Email(ss[0], ss[1])
     },
-    jsonType =  AtomicJsonType.STRING
+    fromJson = {
+        val ss = it.split(Regex("@"), 2)
+        Email(ss[0], ss[1])
+    },
+    toJson = { it.toString() }
 )
 
-val JSONType = AtomicType(
-    typeName = "JSON",
-    tType = JSON::class,
-    asString = {it.toString()},
-    fromString = {JSON(it)},
-    jsonType =  AtomicJsonType.STRING
-)
+//val JSONType = AtomicType(
+//    typeName = "JSON",
+//    tType = JSON::class,
+//    asString = { it.toString() },
+//    fromString = { JSON(it) },
+//    jsonType = AtomicJsonType.STRING
+//)
 
-val UUIDType = AtomicType<UUID>(
+val UUIDType = AtomicType<UUID, String>(
     typeName = "UUID",
     tType = UUID::class,
-    asString = {it.toString()},
-    fromString = {UUID.fromString(it)},
-    jsonType =  AtomicJsonType.STRING
+    asString = { it.toString() },
+    fromString = { UUID.fromString(it) },
+    fromJson = {
+        val ss = it.split(Regex("@"), 2)
+        UUID.fromString(it)
+    },
+    toJson = { it.toString() }
+
 )
 
 class Field<X : Any, T : Type<X>>(
@@ -124,21 +134,21 @@ open class EntityField<E : Any, E_ : Any, X : Any, T : Type<X>>(
     val setter_: (E_, X) -> Unit
 )
 
-class EntityAtomicField<E : Any, E_ : Any, X : Any>(
-    field: Field<X, AtomicType<X>>,
+class EntityAtomicField<E : Any, E_ : Any, X : Any, J>(
+    field: Field<X, AtomicType<X, J>>,
     getter: (E) -> X,
     getter_: (E_) -> X,
     setter_: (E_, X) -> Unit,
     val isSearchable: Boolean = true,
     val isKey: Boolean = false
-) : EntityField<E, E_, X, AtomicType<X>>(field, getter, getter_, setter_)
+) : EntityField<E, E_, X, AtomicType<X, J>>(field, getter, getter_, setter_)
 
-class EntityComplexField<E : Any, E_ : Any, X : Any, X_:Any> (
+class EntityComplexField<E : Any, E_ : Any, X : Any, X_ : Any>(
     field: Field<X, ComplexType<X, X_>>,
     getter: (E) -> X,
     getter_: (E_) -> X,
-     setter_: (E_, X) -> Unit
-): EntityField<E, E_, X, ComplexType<X, X_>>(field, getter, getter_, setter_)
+    setter_: (E_, X) -> Unit
+) : EntityField<E, E_, X, ComplexType<X, X_>>(field, getter, getter_, setter_)
 
 open class ComplexType<E : Any, E_ : Any>(
     override val typeName: String,
@@ -150,7 +160,7 @@ open class ComplexType<E : Any, E_ : Any>(
 
 class EntityType<E : Any, E_ : Any, K : Any>(
     override val typeName: String,
-    val identityField: EntityAtomicField<E, E_, K>,
+    val identityField: EntityAtomicField<E, E_, K, *>,
     fields: List<EntityField<E, E_, *, *>>,
     buildNew: () -> E_,
     buildCopy: (E) -> E_,

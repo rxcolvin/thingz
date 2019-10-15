@@ -9,6 +9,7 @@ import myapplication.Address
 import myapplication.AddressType
 import myapplication.Address_
 import sql.ColumnDef
+import sql.Primary
 import sql.int
 import sql.varchar
 import java.nio.charset.CharsetEncoder
@@ -18,51 +19,56 @@ import java.util.*
 class SqlFieldMeta<X : Any, T : Type<X>>(
     val toDbMap: (X) -> DbMap,
     val fromDbMap: (DbMap) -> X,
-    val columnDefs: List<ColumnDef<*, *>>
+    val columnDefs: List<ColumnDef>
 )
 
 fun columnDefsFromSqlFieldMetas(sqlFieldMetas: List<SqlFieldMeta<*, *>>) = sqlFieldMetas.flatMap { it.columnDefs }
 
 
-
-fun  <E:Any, E_:Any> sqlFieldMeta(entityField: EntityField<E, E_, *,*>): SqlFieldMeta<*, *> =
-    if (entityField is EntityAtomicField) {
+fun <E : Any, E_ : Any> sqlFieldMeta(entityField: EntityField<E, E_, *, *>): SqlFieldMeta<*, *> =
+    if (entityField is EntityAtomicField<*, *, *, *>) {
         val field = entityField.field
         when (entityField.field.type) {
             StringType -> {
-                val columnDef = varchar(field.fieldName, 255)
+                val columnDef = varchar(
+                    name = field.fieldName,
+                    length = 255,
+                    isPrimary = if (entityField.isKey) Primary.FIRST else Primary.NONE
+                )
                 SqlFieldMeta(
                     toDbMap = { mapOf(columnDef.name to DbValue(it)) },
                     fromDbMap = { m -> m.get(columnDef.name)?.asString() ?: throw Exception() },
                     columnDefs = listOf(
-                        varchar(
-                            name = field.fieldName,
-                            length = 255,
-                            isPrimary = entityField.isKey
-                        )
+                        columnDef
                     )
                 )
             }
             IntType -> {
-                val columnDef = varchar(field.fieldName, 255)
+                val columnDef = int(
+                    name = field.fieldName
+                )
                 SqlFieldMeta(
                     toDbMap = { mapOf(columnDef.name to DbValue(it)) },
                     fromDbMap = { m -> m.get(columnDef.name)?.asInt() ?: throw Exception() },
-                    columnDefs = listOf(int(field.fieldName))
+                    columnDefs = listOf(columnDef)
                 )
             }
             UUIDType -> {
-                val columnDef = varchar(field.fieldName, 255)
+                val columnDef = varchar(
+                    name = field.fieldName,
+                    length = 36,
+                    isPrimary = if (entityField.isKey) Primary.FIRST else Primary.NONE
+                )
                 SqlFieldMeta(
                     toDbMap = { mapOf(columnDef.name to DbValue(it.toString())) },
                     fromDbMap = { m -> UUID.fromString(m.get(columnDef.name)?.asString() ?: throw Exception()) },
-                    columnDefs = listOf(varchar(field.fieldName, 255))
+                    columnDefs = listOf(columnDef)
                 )
             }
 
             EmailType -> {
-                val columnDef1 = varchar(field.fieldName + "_NAME", 255)
-                val columnDef2 = varchar(field.fieldName + "_DOMAIN", 255)
+                val columnDef1 = varchar(field.fieldName + "_NAME", 50)
+                val columnDef2 = varchar(field.fieldName + "_DOMAIN", 253)
 
                 SqlFieldMeta(
                     toDbMap = {
@@ -112,12 +118,23 @@ fun  <E:Any, E_:Any> sqlFieldMeta(entityField: EntityField<E, E_, *,*>): SqlFiel
     }
 
 
-fun toJSon(it: Any, type: ComplexType<*, *>): String {
-    return "x=y"
+fun toJSon(item: Any, type: ComplexType<*, *>): String {
+    val t = json.JsonTokenSerializer()
+    t.openMap()
+    type.fields.forEach {
+        val value = (it.getter as (Any) -> Any)(item)
+        when (it.field.type) {
+            is AtomicType<*, *> -> {
+                t.atomicValue( (it.field.type.toJson as (Any) -> Any)(value))
+            }
+        }
+    }
+    t.closeMap()
+    return t.asString()
 }
 
 
-fun fromJSon(json: CharSequence, type: ComplexType<*, *>): String {
+fun fromJSon(json: CharSequence, type: ComplexType<*, *>): Any {
     throw Exception()
 }
 

@@ -5,7 +5,7 @@ import query.QueryDef
 interface StorageManager<K, E> {
   fun createSchema()
   fun describeSchema(): String
-  fun dropSchema()
+  fun dropSchema(silent: Boolean = false)
   fun getById(id: K): E
   fun create(item: E)
   fun update(item: E)

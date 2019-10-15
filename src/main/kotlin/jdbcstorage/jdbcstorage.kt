@@ -5,8 +5,7 @@ import expression.Field
 import expression.Parameter
 import jdbc.Connection
 import jdbc.DbMap
-import jdbc.DbValue
-import jdbc.PreparedStatement
+import jdbc.DbMapBuilder
 import meta.*
 import query.QueryDef
 import sql.SqlHelper
@@ -15,13 +14,17 @@ import sql.Table
 import storage.StorageManager
 
 
-
-//TODO: Replace
-class SimpleDbMapper<K : Any, E : Any, E_ : Any>(
+/**
+ *
+ */
+private class SqlMapper<K : Any, E : Any, E_ : Any>(
     schemaName: String,
     val entityType: EntityType<E, E_, K>
- )  {
-    private val sqlFieldMetas = entityType.fields.map { it to sqlFieldMeta(it) }
+) {
+    val identitySqlMeta = sqlFieldMeta(entityType.identityField)
+    val sqlFieldMetas =
+        (entityType.fields.map { it to sqlFieldMeta(it) } + (entityType.identityField to identitySqlMeta))
+
     val table = Table(
         tableName = entityType.typeName,
         schemaName = schemaName,
@@ -39,23 +42,36 @@ class SimpleDbMapper<K : Any, E : Any, E_ : Any>(
     }
 
     fun toMap(item: E): DbMap {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        val dbMapBuilder = DbMapBuilder()
+        sqlFieldMetas.forEach {
+            val value = (it.first.getter)(item)
+            val x = (it.second.toDbMap as (Any) -> DbMap)
+            val dbMap = x(value)
+            dbMap.entries.forEach {
+                dbMapBuilder.put(it.key, it.value)
+            }
+        }
+        return dbMapBuilder.toMap()
     }
 
     val identityFieldName: String =
         entityType.identityField.field.fieldName
 
-    fun identityValue(key: K): DbValue {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+    fun identityValue(key: K): DbMap {
+        val x = identitySqlMeta.toDbMap as (Any) -> DbMap
+        return x(key)
     }
 }
 
 
 class SimpleJdbcStorageManager<K : Any, E : Any, E_ : Any>(
-    val dbMapper: SimpleDbMapper<K, E, E_>,
+    schemaName: String,
+    val entityType: EntityType<E, E_, K>,
     val sqlHelper: SqlHelper,
     val connection: Connection
 ) : StorageManager<K, E> {
+
+    private val sqlMapper = SqlMapper(schemaName, entityType)
 
     inner class PreparedStatementHolder(
         val sqlStatement: SqlStatement
@@ -64,60 +80,75 @@ class SimpleJdbcStorageManager<K : Any, E : Any, E_ : Any>(
             connection.prepareStatement(sqlStatement.sql)
         }
 
+        fun execute() {
+            preparedStatement.execute()
+        }
+
         fun execute(dbMap: DbMap) =
             preparedStatement.execute(sqlStatement.parameters.map { dbMap.getOrElse(it, { throw Exception() }) })
 
 
         fun executeQuery(dbMap: DbMap): Sequence<DbMap> =
-            preparedStatement.executeQuery(sqlStatement.parameters.map {
-                dbMap.getOrElse(
-                    it,
-                    { throw Exception() })
-            }).asMapSequence()
+            preparedStatement.executeQuery(
+                sqlStatement.parameters.map {
+                    dbMap.getOrElse(
+                        it,
+                        { throw Exception() })
+                }
+            ).asMapSequence()
     }
 
+    val createStatement = PreparedStatementHolder(
+        sqlHelper.createTableSql(sqlMapper.table)
+    )
 
     //Schema may not have been created deferred until first usage
     val insertStatement = PreparedStatementHolder(
-        sqlHelper.insertSql(dbMapper.table)
+        sqlHelper.insertSql(sqlMapper.table)
     )
 
+    //TOOD: Needs to work for compound Key type amd multi field primary keys
     val getByIdStatement = PreparedStatementHolder(
         sqlHelper.selectSql(
-            table = dbMapper.table,
+            table = sqlMapper.table,
             where = Eq<K>(
-                Field(dbMapper.identityFieldName),
-                Parameter(dbMapper.identityFieldName)
+                Field(sqlMapper.identitySqlMeta.columnDefs[0].name),
+                Parameter(sqlMapper.identitySqlMeta.columnDefs[0].name)
             )
         )
     )
 
-
     override fun describeSchema(): String = "???"
 
     override fun createSchema() {
-        connection.prepareStatement(
-            sqlHelper.createTableSql(dbMapper.table).sql
-        ).execute()
+        createStatement.execute()
     }
 
-    override fun dropSchema() {
-        connection.prepareStatement(
-            sqlHelper.dropTableSql(dbMapper.table).sql
-        ).execute()
+    override fun dropSchema(silent: Boolean) {
+        try {
+            connection.prepareStatement(
+                sqlHelper.dropTableSql(sqlMapper.table).sql
+            ).execute()
+        } catch (ex: java.sql.SQLNonTransientException) {
+            if (silent) {
+                if (!sqlHelper.validateDropTableException(sqlMapper.table, ex)) {
+                    throw ex
+                }
+            }
+        }
     }
 
     //TODO: Deal with Complex Keys
     override fun getById(id: K): E =
-        dbMapper.fromMap(
+        sqlMapper.fromMap(
             getByIdStatement.executeQuery(
-                mapOf(dbMapper.identityFieldName to dbMapper.identityValue(id))
+                sqlMapper.identityValue(id)
             ).firstOrNull() ?: throw Exception()
         )
 
 
     override fun create(item: E) =
-        insertStatement.execute(dbMapper.toMap(item))
+        insertStatement.execute(sqlMapper.toMap(item))
 
     override fun update(item: E) {
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
