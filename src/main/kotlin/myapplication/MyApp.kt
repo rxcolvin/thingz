@@ -5,6 +5,9 @@ import jdbcstorage.SimpleJdbcStorageManager
 import lang.Email
 import meta.*
 import sql.DerbySqlHelper
+import java.text.SimpleDateFormat
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.*
 
 val nullUUID = UUID.randomUUID()
@@ -126,7 +129,8 @@ val PersonType = EntityType(
 
 
 fun main() {
-    System.getProperty("java.class.path").split(";").forEach {
+
+     System.getProperty("java.class.path").split(";").forEach {
         println(it)
     }
 
