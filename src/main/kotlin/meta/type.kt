@@ -1,5 +1,8 @@
 package meta
 
+import json.JsonMap
+import json.jsonMapParser
+import json.jsonMapUnparser
 import lang.Email
 import java.util.*
 import kotlin.reflect.KClass
@@ -131,7 +134,8 @@ open class EntityField<E : Any, E_ : Any, X : Any, T : Type<X>>(
     val field: Field<X, T>,
     val getter: (E) -> X,
     val getter_: (E_) -> X,
-    val setter_: (E_, X) -> Unit
+    val setter_: (E_, X) -> Unit,
+    val nullable: Boolean = false
 )
 
 class EntityAtomicField<E : Any, E_ : Any, X : Any, J>(
@@ -169,4 +173,75 @@ class EntityType<E : Any, E_ : Any, K : Any>(
 
 
 
+fun <E:Any, E_:Any, K: Any> toJson(item: E, type: EntityType<E, E_, K>) : String =
+    jsonMapUnparser(toJSonMap(item, type))
 
+fun <E:Any, E_:Any, K: Any> toJSonMap(item: Any, type: EntityType<E, E_, K>): JsonMap {
+    val builder = LinkedHashMap<String, Any?>()
+
+    with(type.identityField) {
+        val value = (getter as (Any) -> Any)(item)
+        builder.put(field.fieldName, (field.type.toJson as (Any) -> Any)(value))
+    }
+    type.fields.forEach {
+        val value = (it.getter as (Any) -> Any)(item)
+        when (it.field.type) {
+            is AtomicType<*, *> -> {
+                builder.put(it.field.fieldName, (it.field.type.toJson as (Any) -> Any)(value))
+            }
+            is ComplexType<*,*> -> {
+                builder.put(it.field.fieldName, toJSonMap(value, it.field.type))
+            }
+        }
+    }
+    return builder.toMap()
+}
+
+
+fun <E:Any, E_:Any> toJson(item: Any, type: ComplexType<E, E_>) : String =
+    jsonMapUnparser(toJSonMap(item, type))
+
+
+fun <E:Any, E_:Any> toJSonMap(item: Any, type: ComplexType<E, E_>): JsonMap {
+    val builder = LinkedHashMap<String, Any?>()
+
+    type.fields.forEach {
+        val value = (it.getter as (Any) -> Any)(item)
+        when (it.field.type) {
+            is AtomicType<*, *> -> {
+                builder.put(it.field.fieldName, (it.field.type.toJson as (Any) -> Any)(value))
+            }
+            is ComplexType<*,*> -> {
+                builder.put(it.field.fieldName, toJSonMap(value, it.field.type))
+            }
+        }
+    }
+    return builder.toMap()
+}
+
+
+fun <E:Any, E_:Any> fromJSon(json: CharSequence, type: ComplexType<E, E_>): E =
+    fromJsonMap(jsonMapParser(json.toString()), type)
+
+
+fun <E:Any, E_:Any> fromJsonMap(map: JsonMap,  type: ComplexType<E, E_>) : E {
+    val builder = type.buildNew()
+    type.fields.forEach {
+        val setter_ = it.setter_ as (Any, Any?) -> Unit
+        val jsonValue  = map.get(it.field.fieldName)
+        if (jsonValue == null && !it.nullable) {
+            throw Exception("Value for field ${it.field.fieldName} ")
+        }
+        if (jsonValue == null) {
+            setter_(builder, null)
+        } else {
+            val value =  when (it.field.type) {
+                is AtomicType<*,*> -> (it.field.type.fromJson as (Any) -> Any)(jsonValue)
+                is ComplexType<*,*> -> fromJsonMap(jsonValue as JsonMap, it.field.type)
+                else -> TODO()
+            }
+            setter_(builder, value)
+        }
+    }
+    return type.build(builder)
+}

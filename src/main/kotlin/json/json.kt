@@ -1,10 +1,10 @@
 package json
 
-import java.lang.NumberFormatException
+import kotlin.NumberFormatException
 
+typealias JsonMap = Map<String, Any?>
 
-class JsonMap
-class JsonList
+typealias JsonList = List<Any?>
 
 
 enum class JsonValueType {
@@ -34,14 +34,19 @@ enum class JsonValueType {
 interface TokenDeserializer {
     fun openMap()
     fun closeMap()
+    fun isCloseMap(): Boolean
     fun openList()
     fun closeList()
+    fun isCloseList(): Boolean
     fun key(): String
     fun atomicValue(): Any?
     fun valueType(): JsonValueType
     fun value(): Any?
     fun listSeperator()
-    fun mapSeparator()
+    fun mapPropertySeparator()
+    fun mapEntrySeparator()
+    fun exception(msg: String): Nothing
+
 }
 
 interface TokenSerializer {
@@ -52,12 +57,14 @@ interface TokenSerializer {
     fun key(name: String)
     fun atomicValue(value: Any?)
     fun listSeperator()
-    fun mapSeparator()
+    fun mapPropertySeparator()
+    fun mapEntrySeparator()
     fun asString(): String
 }
 
 
 class JsonTokenSerializer(
+
 ) : TokenSerializer {
     private val builder = StringBuilder()
 
@@ -95,8 +102,10 @@ class JsonTokenSerializer(
 
     override fun atomicValue(value: Any?) {
         when (value) {
-            is String -> quotize(value)
-            is Number, Boolean -> builder.append(value.toString())
+            is CharSequence -> quotize(value)
+            is Number -> builder.append(value.toString())
+            is Boolean -> builder.append(if (value) "true" else "false")
+            null -> builder.append("null")
             else -> throw Exception("Not Atomic JSON Type")
         }
     }
@@ -105,16 +114,21 @@ class JsonTokenSerializer(
         builder.append(", ")
     }
 
-    override fun mapSeparator() {
+    override fun mapPropertySeparator() {
         builder.append(":")
     }
 
+
+    override fun mapEntrySeparator() {
+        builder.append(", ")
+    }
 
     override fun asString(): String = builder.toString()
 }
 
 class JsonTokenDeserializer(
-    private val input: CharSequence
+    private val input: CharSequence,
+    private val allowPlusSign:Boolean = false
 ) : TokenDeserializer {
 
     private var pos: Int = 0
@@ -135,6 +149,11 @@ class JsonTokenDeserializer(
         next()
     }
 
+    override fun isCloseMap(): Boolean {
+        skipWs()
+        return head == '}'
+    }
+
     override fun openList() {
         skipWs()
         if (head != '[') exception("Expecting [")
@@ -145,6 +164,11 @@ class JsonTokenDeserializer(
         skipWs()
         if (head != ']') exception("Expecting ]")
         next()
+    }
+
+    override fun isCloseList(): Boolean {
+        skipWs()
+        return head == ']'
     }
 
     override fun key(): String {
@@ -171,7 +195,7 @@ class JsonTokenDeserializer(
             't', 'f' -> JsonValueType.BOOLEAN
             'n' -> JsonValueType.NULL
             '{' -> JsonValueType.MAP
-            '[' -> JsonValueType.MAP
+            '[' -> JsonValueType.LIST
             else -> exception("Expected one of  \", +, -, { , [ or a digit")
         }
     }
@@ -181,18 +205,22 @@ class JsonTokenDeserializer(
     }
 
     override fun listSeperator() {
-         match(",")
+        match(",")
     }
 
-    override fun mapSeparator() {
+    override fun mapPropertySeparator() {
         match(":")
+    }
+
+    override fun mapEntrySeparator() {
+        match(",")
     }
 
     fun skipWs() {
         while (head.isWhitespace()) {
             if (head == '\n' || head == '\r') {
                 line++
-                col=0
+                col = 0
             }
             next()
         }
@@ -210,6 +238,9 @@ class JsonTokenDeserializer(
         val sb = StringBuilder()
         var escaped = false
         loop@ while (true) {
+            if (head == '\n' || head == '\r') {
+                exception("Line Break not allowed here")
+            }
             if (!escaped) {
                 when (head) {
                     '\\' -> escaped = true
@@ -227,28 +258,31 @@ class JsonTokenDeserializer(
                     else -> sb.append("\\" + head)
                 }
                 escaped = false
-
             }
             next()
-
         }
         next()
         return sb.toString()
     }
 
     fun number(): Number {
+        skipWs()
         val sb = StringBuilder()
         var hasDP = false
-        val sign = when (head) {
-            '+' -> {
-                next(); 1
-            }
-            '-' -> {
-                next(); -1
-            }
-            else -> 1
-        }
+        var first = true
+
         while (true) {
+            if (first) {
+                if (head == '-') {
+                    sb.append('-')
+                    next()
+                } else if (head == '+' && !allowPlusSign) {
+                    exception("Numbers can't start with '+'" )
+                    next()
+                }
+            } else {
+                first = false
+            }
             if (head.isDigit()) {
                 sb.append(head)
                 next()
@@ -263,10 +297,14 @@ class JsonTokenDeserializer(
                 break
             }
         }
-        return if (hasDP) sb.toString().toDouble() * sign else sb.toString().toInt() * sign
+        return if (hasDP) {
+            sb.toString().toDouble()
+        }  else {
+            sb.toString().toLong()
+        }
     }
 
-    fun boolean() : Boolean {
+    fun boolean(): Boolean {
         fun bad(): Nothing = exception("Expecting 'true' or 'false'")
 
         val ret: Boolean = when (head) {
@@ -283,12 +321,12 @@ class JsonTokenDeserializer(
         return ret
     }
 
-    fun parseNull() : Any? {
+    fun parseNull(): Any? {
         match("null")
         return null
     }
 
-    fun match(s: String ) {
+    fun match(s: String) {
         skipWs()
         s.forEach {
             if (head != it) exception("Expecting '$s'")
@@ -296,11 +334,126 @@ class JsonTokenDeserializer(
         }
     }
 
-    fun exception(msg: String) : Nothing {
+    override fun exception(msg: String): Nothing {
         throw Exception("Parsing Error at ($line:$col [$pos]) - $msg")
     }
-
 }
+
+
+fun jsonMapParser(json: String): JsonMap {
+    return mapParser(JsonTokenDeserializer(json))
+}
+
+fun listParser(deserializer: TokenDeserializer): List<Any?> {
+    val builder = ArrayList<Any?>()
+
+    with(deserializer) {
+        openList()
+        var first = true
+        while (!isCloseList()) {
+            if (!first) {
+                listSeperator()
+            } else {
+                first = false
+            }
+            builder.add(
+                valueParser(this)
+            )
+        }
+        closeList()
+
+    }
+    return builder.toList()
+}
+
+fun <T : TokenDeserializer> mapParser(deserializer: T): JsonMap {
+    val builder: MutableMap<String, Any?> = LinkedHashMap()
+
+    with(deserializer) {
+        openMap()
+        var first = true
+        while (!isCloseMap()) {
+            if (!first) {
+                mapEntrySeparator()
+            } else {
+                first = false
+            }
+            val key = key()
+            if (builder.contains(key)) {
+                exception("Map entry with key $key already exists")
+            }
+            mapPropertySeparator()
+            builder.put(
+                key,
+                valueParser(this)
+            )
+        }
+        closeMap()
+    }
+    return builder.toMap()
+}
+
+fun <T : TokenDeserializer> valueParser(deserializer: T): Any? =
+    with(deserializer) {
+        when (deserializer.valueType()) {
+            JsonValueType.STRING, JsonValueType.NUMBER, JsonValueType.BOOLEAN, JsonValueType.NULL -> deserializer.atomicValue()
+            JsonValueType.MAP -> mapParser(this)
+            JsonValueType.LIST -> listParser(this)
+        }
+    }
+
+fun jsonMapUnparser(m: JsonMap): String {
+    val s = JsonTokenSerializer()
+    mapUnparser(s, m)
+    return s.asString()
+}
+
+fun <T : TokenSerializer> mapUnparser(t: T, m: JsonMap) {
+    with(t) {
+        openMap()
+        var first = true
+        m.entries.forEach {
+            if (!first) {
+                mapEntrySeparator()
+            } else {
+                first = false
+            }
+            key(it.key)
+            mapPropertySeparator()
+            when (it.value) {
+                null -> atomicValue(null)
+                is Number, is Boolean, is String -> atomicValue(it.value)
+                is List<Any?> -> listUnparser(this, it.value as List<Any?>)
+                is Map<*, *> -> mapUnparser(this, it.value as JsonMap)
+                else -> throw Exception("${it.value!!::class.qualifiedName} is not a JSON type")
+            }
+        }
+        closeMap()
+    }
+}
+
+fun <T : TokenSerializer> listUnparser(t: T, list: List<Any?>) {
+    with(t) {
+        openList()
+        var first = true
+        list.forEach {
+            if (!first) {
+                mapEntrySeparator()
+            } else {
+                first = false
+            }
+            when (it) {
+                null -> atomicValue(null)
+                is Number, is Boolean, is String -> atomicValue(it)
+                is List<Any?> -> listUnparser(this, it as List<Any?>)
+                is Map<*, *> -> mapUnparser(this, it as JsonMap)
+            }
+        }
+        closeList()
+    }
+}
+
+
 
 
 

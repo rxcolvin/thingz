@@ -13,7 +13,7 @@ internal class JsonTokenDeserializerTest {
     fun one() {
         target.openMap()
         println(target.key())
-        target.mapSeparator()
+        target.mapPropertySeparator()
         println(target.atomicValue())
         target.closeMap()
     }

@@ -143,7 +143,7 @@ class SimpleJdbcStorageManager<K : Any, E : Any, E_ : Any>(
         sqlMapper.fromMap(
             getByIdStatement.executeQuery(
                 sqlMapper.identityValue(id)
-            ).firstOrNull() ?: throw Exception()
+            ).firstOrNull() ?: throw Exception("Not Found")
         )
 
 

@@ -10,7 +10,7 @@ internal class JsonTokenSerializerTest {
     fun one() {
         target.openMap()
         target.key("foo")
-        target.mapSeparator()
+        target.mapPropertySeparator()
         target.atomicValue("Bar")
 
         target.closeMap()

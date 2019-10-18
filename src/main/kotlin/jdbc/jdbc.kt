@@ -1,6 +1,8 @@
 package jdbc
 
 import sql.ColName
+import sql.DerbySqlHelper
+import sql.SqlHelper
 import java.sql.Connection as JdbcConnection
 import java.sql.Driver as JdbcDriver
 import java.sql.DriverManager as JdbcDriverManager
@@ -128,4 +130,21 @@ class PreparedStatementImpl(
 
 
 
+interface JdbcHelper {
+    fun connection(databasename: String): Connection
+    fun sqlHelper(): SqlHelper
 
+}
+
+class DerbyJdbcHelper(val driver: Any? = Class.forName("org.apache.derby.jdbc.EmbeddedDriver")) : JdbcHelper {
+
+    override fun sqlHelper(): SqlHelper {
+        return DerbySqlHelper()
+    }
+
+    override fun connection(databasename: String): Connection =
+        DriverManager.getConnection("jdbc:derby:/derbydatabases/$databasename;create=true")
+
+
+
+}

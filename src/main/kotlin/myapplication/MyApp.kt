@@ -1,13 +1,15 @@
 package myapplication
 
+import api.APIHttpEngine
+import api.AssetAPI
+import io.ktor.server.engine.applicationEngineEnvironment
 import jdbc.DriverManager
 import jdbcstorage.SimpleJdbcStorageManager
 import lang.Email
 import meta.*
+import org.http4k.core.Method
+import org.http4k.core.Request
 import sql.DerbySqlHelper
-import java.text.SimpleDateFormat
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import java.util.*
 
 val nullUUID = UUID.randomUUID()
@@ -137,6 +139,8 @@ fun main() {
     try {
 
 
+
+
         Class.forName("org.apache.derby.jdbc.EmbeddedDriver")
         val cxn = DriverManager.getConnection("jdbc:derby:/derbydatabases/testone;create=true")
 
@@ -165,6 +169,23 @@ fun main() {
         )
         storageManager.create(person)
         println(storageManager.getById(person.uuid))
+
+        val assetAPI = AssetAPI(
+            entityType = PersonType,
+            storageManager = storageManager
+
+        )
+
+        val response = assetAPI.getById(person.uuid.toString())
+        println(response.body)
+
+        val engine = APIHttpEngine(
+            assetAPIs = listOf(assetAPI)
+        )
+
+        println(engine.app(Request(Method.GET, "/person/${person.uuid.toString()}")))
+
+        engine.start()
 
 
     } catch (e: Exception) {

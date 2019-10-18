@@ -1,19 +1,15 @@
 package meta
 
 import jdbc.DbMap
-import jdbc.DbMapBuilder
 import jdbc.DbValue
 import lang.Email
-import lang.JSON
-import myapplication.Address
-import myapplication.AddressType
-import myapplication.Address_
 import sql.ColumnDef
 import sql.Primary
 import sql.int
 import sql.varchar
-import java.nio.charset.CharsetEncoder
 import java.util.*
+import json.*
+import kotlin.collections.LinkedHashMap
 
 
 class SqlFieldMeta<X : Any, T : Type<X>>(
@@ -101,7 +97,7 @@ fun <E : Any, E_ : Any> sqlFieldMeta(entityField: EntityField<E, E_, *, *>): Sql
             toDbMap = {
                 mapOf(
                     columnDef.name to DbValue(
-                        toJSon(it, field.type as ComplexType<*, *>)
+                        toJson(it, field.type as ComplexType<*, *>)
                     )
                 )
             },
@@ -117,26 +113,6 @@ fun <E : Any, E_ : Any> sqlFieldMeta(entityField: EntityField<E, E_, *, *>): Sql
         throw java.lang.Exception()
     }
 
-
-fun toJSon(item: Any, type: ComplexType<*, *>): String {
-    val t = json.JsonTokenSerializer()
-    t.openMap()
-    type.fields.forEach {
-        val value = (it.getter as (Any) -> Any)(item)
-        when (it.field.type) {
-            is AtomicType<*, *> -> {
-                t.atomicValue( (it.field.type.toJson as (Any) -> Any)(value))
-            }
-        }
-    }
-    t.closeMap()
-    return t.asString()
-}
-
-
-fun fromJSon(json: CharSequence, type: ComplexType<*, *>): Any {
-    throw Exception()
-}
 
 
 
