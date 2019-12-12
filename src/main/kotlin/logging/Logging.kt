@@ -22,20 +22,19 @@ private val outPw = PrintWriter(System.out)
 class LogStream(
     val name: String,
     val ps: PrintWriter = errPw,
-    val decorator : (LogStream)->String = {"[$name]"}
+    val decorator: (LogStream) -> String = { "[$name]" }
 ) : (Any) -> Unit {
 
-  override fun invoke(p1: Any) {
-    if (p1 is Exception) {
-      ps.println("[$name] ${p1.message}")
-      p1.printStackTrace(ps)
-    } else {
-      ps.println("[$name] $p1")
-      ps.flush()
+    override fun invoke(p1: Any) {
+        if (p1 is Exception) {
+            ps.println("[$name] ${p1.message}")
+            p1.printStackTrace(ps)
+        } else {
+            ps.println("[$name] $p1")
+            ps.flush()
+        }
     }
-  }
 }
-
 
 
 class Logger(
@@ -47,48 +46,48 @@ class Logger(
     var debugEnabled: Boolean = false
 ) {
 
-  private val map = ConcurrentHashMap<KClass<*>, ClassLogger<*>>()
-  private val fmap = ConcurrentHashMap<KFunction<*>, FunLogger>()
+    private val map = ConcurrentHashMap<KClass<*>, ClassLogger<*>>()
+    private val fmap = ConcurrentHashMap<KFunction<*>, FunLogger>()
 
-  inline fun info(s: () -> Any) {
-    if (infoEnabled) info_(s())
-  }
+    inline fun info(s: () -> Any) {
+        if (infoEnabled) info_(s())
+    }
 
-  inline fun debug(s: () -> Any) {
-    if (debugEnabled) debug_(s())
-  }
+    inline fun debug(s: () -> Any) {
+        if (debugEnabled) debug_(s())
+    }
 
-    inline fun <T> debug(v: T, s: (T) -> Any) : T {
+    inline fun <T> debug(v: T, s: (T) -> Any): T {
         if (debugEnabled) debug_(s(v))
         return v
     }
 
 
-  inline fun error(s: () -> Any) {
-    this.error_(s())
-  }
+    inline fun error(s: () -> Any) {
+        this.error_(s())
+    }
 
-  /**
-   * Get a ClassLogger wrapper for this instance.
-   */
-  fun <T : Any> klogger(kclass: KClass<T>): ClassLogger<T> {
-    return map.computeIfAbsent(
-        kclass,
-        { k -> ClassLogger(k, this) }
-    ) as ClassLogger<T>
+    /**
+     * Get a ClassLogger wrapper for this instance.
+     */
+    fun <T : Any> klogger(kclass: KClass<T>): ClassLogger<T> {
+        return map.computeIfAbsent(
+            kclass,
+            { k -> ClassLogger(k, this) }
+        ) as ClassLogger<T>
 
-  }
+    }
 
-  /**
-   * Get a FunLogger wrapper for this instance.
-   */
-  fun flogger(kfun: KFunction<*>): FunLogger {
-    return fmap.computeIfAbsent(
-        kfun,
-        { k -> FunLogger(k, this) }
-    )
+    /**
+     * Get a FunLogger wrapper for this instance.
+     */
+    fun flogger(kfun: KFunction<*>): FunLogger {
+        return fmap.computeIfAbsent(
+            kfun,
+            { k -> FunLogger(k, this) }
+        )
 
-  }
+    }
 
 }
 
@@ -96,7 +95,7 @@ class Logger(
  * Log levels
  */
 enum class LogLevel(val level: Int) {
-  ERROR(-1), INFO(0), DEBUG(1)
+    ERROR(-1), INFO(0), DEBUG(1)
 }
 
 data class LogStreamConfig(
@@ -119,27 +118,27 @@ class ClassLogger<T : Any>(
     val kclass: KClass<T>,
     val inner: Logger
 ) {
-  private val map = ConcurrentHashMap<KFunction<*>, MethodLogger<*>>()
+    private val map = ConcurrentHashMap<KFunction<*>, MethodLogger<*>>()
 
-  inline fun info(s: () -> Any) {
-    inner.info({ "${kclass.simpleName} ${s()}" })
-  }
+    inline fun info(s: () -> Any) {
+        inner.info({ "${kclass.simpleName} ${s()}" })
+    }
 
-  inline fun debug(s: () -> Any) {
-    inner.debug({ "[${kclass.simpleName}] ${s()}" })
-  }
+    inline fun debug(s: () -> Any) {
+        inner.debug({ "[${kclass.simpleName}] ${s()}" })
+    }
 
-  inline fun error(s: () -> Any) {
-    inner.error({  "[${kclass.simpleName}] ${s()}" })
-  }
+    inline fun error(s: () -> Any) {
+        inner.error({ "[${kclass.simpleName}] ${s()}" })
+    }
 
-  fun mlogger(m: KFunction<*>): MethodLogger<T> {
-    return map.computeIfAbsent(
-        m,
-        { k -> MethodLogger(k, this) }
-    ) as MethodLogger<T>
+    fun mlogger(m: KFunction<*>): MethodLogger<T> {
+        return map.computeIfAbsent(
+            m,
+            { k -> MethodLogger(k, this) }
+        ) as MethodLogger<T>
 
-  }
+    }
 }
 
 /**
@@ -150,17 +149,17 @@ class FunLogger(
     val kFunction: KFunction<*>,
     val inner: Logger
 ) {
-  inline fun info(s: () -> Any) {
-    inner.info({ "[${kFunction.name}] ${s()}" })
-  }
+    inline fun info(s: () -> Any) {
+        inner.info({ "[${kFunction.name}] ${s()}" })
+    }
 
-  inline fun debug(s: () -> Any) {
-    inner.debug({ "[${kFunction.name}] ${s()}" })
-  }
+    inline fun debug(s: () -> Any) {
+        inner.debug({ "[${kFunction.name}] ${s()}" })
+    }
 
-  inline fun error(s: () -> Any) {
-    inner.error({ "[${kFunction.name}] ${s()}" })
-  }
+    inline fun error(s: () -> Any) {
+        inner.error({ "[${kFunction.name}] ${s()}" })
+    }
 }
 
 /**
@@ -170,17 +169,17 @@ class MethodLogger<T : Any>(
     val kFunction: KFunction<*>,
     val inner: ClassLogger<T>
 ) {
-  inline fun info(s: () -> Any) {
-    inner.inner.info({ "[${inner.kclass.simpleName}::${kFunction.name}] ${s()}" })
-  }
+    inline fun info(s: () -> Any) {
+        inner.inner.info({ "[${inner.kclass.simpleName}::${kFunction.name}] ${s()}" })
+    }
 
-  inline fun debug(s: () -> Any) {
-    inner.inner.debug({ "[${inner.kclass.simpleName}::${kFunction.name}] ${s()}" })
-  }
+    inline fun debug(s: () -> Any) {
+        inner.inner.debug({ "[${inner.kclass.simpleName}::${kFunction.name}] ${s()}" })
+    }
 
-  inline fun error(s: () -> Any) {
-    inner.inner.error({ "[${inner.kclass.simpleName}::${kFunction.name}] ${s()}" })
-  }
+    inline fun error(s: () -> Any) {
+        inner.inner.error({ "[${inner.kclass.simpleName}::${kFunction.name}] ${s()}" })
+    }
 }
 
 /**
@@ -198,16 +197,14 @@ fun loggerConfigsToLoggers(
     configs: List<LoggerConfig>
 ): (String) -> Logger {
 
-  val map = configs.map {
-    configToLogger(it)
-  }.associateBy { it.name }
+    val map = configs.map {
+        configToLogger(it)
+    }.associateBy { it.name }
 
-  val defo = map.getOrElse("__Default__", { defoLogger })
+    val defo = map.getOrElse("__Default__", { defoLogger })
 
-  return {map.getOrDefault(it, defoLogger)}
+    return { map.getOrDefault(it, defoLogger) }
 }
-
-
 
 
 fun configToLogger(config: LoggerConfig): Logger =
@@ -232,50 +229,50 @@ private fun logStreamConfigToLogStream(
     config: LogStreamConfig
 ): LogStream {
 
-  /* Any failed configs will fallback to this handling */
-  fun handleDefault(msg: String): PrintWriter {
-    val ret = errPw
-    ret.println(msg)
-    ret.println("Falling back to System.err")
+    /* Any failed configs will fallback to this handling */
+    fun handleDefault(msg: String): PrintWriter {
+        val ret = errPw
+        ret.println(msg)
+        ret.println("Falling back to System.err")
+        return ret;
+    }
+
+    /* Handle standard streams*/
+    fun handleSystem(param: String): PrintWriter {
+        return when (param) {
+            "err" -> errPw
+            "out" -> outPw
+            else -> handleDefault("Bad output Config #:$param")
+        }
+    }
+
+    /* Handle a File Stream */
+    fun handleFile(fileName: String): PrintWriter {
+        val ret = printWriterCache.computeIfAbsent(fileName, { PrintWriter(File(fileName)) })
+        try {
+            ret.println("")
+        } catch (e: Exception) {
+            return handleDefault("Can't write to file: $fileName because ${e.message}")
+        }
+        return ret
+    }
+
+    /* Currently two types of stream - could add others, like a queue*/
+    fun stringToPrintWriter(output: String): PrintWriter {
+        val (type, params) = output.pair()
+        return when (type) {
+            "#" -> handleSystem(params)
+            "file" -> handleFile(params)
+            else -> handleDefault("Bad output Config: $output")
+        }
+    }
+
+    val ret = LogStream(
+        name.name,
+        stringToPrintWriter(config.output)
+    )
+
     return ret;
-  }
-
-  /* Handle standard streams*/
-  fun handleSystem(param: String): PrintWriter {
-    return when (param) {
-      "err" -> errPw
-      "out" -> outPw
-      else -> handleDefault("Bad output Config #:$param")
-    }
-  }
-
-  /* Handle a File Stream */
-  fun handleFile(fileName: String): PrintWriter {
-    val ret = printWriterCache.computeIfAbsent(fileName, { PrintWriter(File(fileName)) })
-    try {
-      ret.println("")
-    } catch (e: Exception) {
-      return handleDefault("Can't write to file: $fileName because ${e.message}")
-    }
-    return ret
-  }
-
-  /* Currently two types of stream - could add others, like a queue*/
-  fun stringToPrintWriter(output: String): PrintWriter {
-    val (type, params) = output.pair()
-    return when (type) {
-      "#" -> handleSystem(params)
-      "file" -> handleFile(params)
-      else -> handleDefault("Bad output Config: $output")
-    }
-  }
-
-  val ret = LogStream(
-      name.name,
-      stringToPrintWriter(config.output)
-  )
-
-  return ret;
 }
 
 //fun loggerConfiFromFile(
@@ -300,9 +297,9 @@ private fun logStreamConfigToLogStream(
 //  return loggerConfigsToLoggers(emptyList())
 //}
 
-fun String.pair(sep: String = ":") : Pair<String, String> {
+fun String.pair(sep: String = ":"): Pair<String, String> {
     val ss = this.split(sep.toRegex(), 2)
-    return Pair(ss[0], if (ss.size == 2)  ss[1] else "")
+    return Pair(ss[0], if (ss.size == 2) ss[1] else "")
 }
 
 
@@ -316,7 +313,7 @@ fun main(args: Array<String>) {
 //            )
 //    )
 
-  //val configs = loggerConfiFromFile(File("logging.json"))
+    //val configs = loggerConfiFromFile(File("logging.json"))
 
 //  val logger = loggerConfigsToLoggers(configs)["Foo"]!!
 //

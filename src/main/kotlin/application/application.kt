@@ -1,10 +1,11 @@
 package application
 
-import api.APIHttpEngine
+import api.APIHttp4KEngine
 import api.AssetAPI
 import jdbc.JdbcHelper
 import jdbcstorage.SimpleJdbcStorageManager
-import meta.EntityType
+import common.meta.EntityType
+import kotlin.concurrent.thread
 
 class Application(
     val jdbcHelper: JdbcHelper,
@@ -14,7 +15,7 @@ class Application(
     val sqlHelper = jdbcHelper.sqlHelper()
 
 
-    fun <E : Any, E_ : Any, K : Any> buildOne(entityType: EntityType<E, E_, K>): AssetAPI<E, E_, K> {
+    private fun <E : Any, E_ : Any, K : Any> buildOne(entityType: EntityType<E, E_, K>): AssetAPI<E, E_, K> {
         val storageManager = SimpleJdbcStorageManager(
             connection = cxn,
             entityType = entityType,
@@ -32,12 +33,18 @@ class Application(
         buildOne(it)
     }
 
-    val engine = APIHttpEngine(
-        assetAPIs = assetAPIs
-    )
+    val engine = APIHttp4KEngine(
+        assetAPIs = assetAPIs,
+        exiting = {
+            thread(start = true) {
+                Thread.sleep(500)
+                System.exit(0)}
+            }
+     )
 
     fun start() {
         engine.start()
+        Thread.currentThread().join()
     }
 }
 

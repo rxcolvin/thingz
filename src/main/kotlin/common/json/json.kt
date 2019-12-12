@@ -1,4 +1,4 @@
-package json
+package common.json
 
 import kotlin.NumberFormatException
 
@@ -408,6 +408,12 @@ fun jsonMapUnparser(m: JsonMap): String {
     return s.asString()
 }
 
+fun jsonListUnparser(m: JsonList) : String {
+    val s = JsonTokenSerializer()
+    listUnparser(s, m)
+    return s.asString()
+}
+
 fun <T : TokenSerializer> mapUnparser(t: T, m: JsonMap) {
     with(t) {
         openMap()
@@ -445,7 +451,7 @@ fun <T : TokenSerializer> listUnparser(t: T, list: List<Any?>) {
             when (it) {
                 null -> atomicValue(null)
                 is Number, is Boolean, is String -> atomicValue(it)
-                is List<Any?> -> listUnparser(this, it as List<Any?>)
+                is JsonList -> listUnparser(this, it)
                 is Map<*, *> -> mapUnparser(this, it as JsonMap)
             }
         }

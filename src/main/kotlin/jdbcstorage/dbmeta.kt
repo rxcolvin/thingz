@@ -1,15 +1,14 @@
-package meta
+package jdbcstorage
 
 import jdbc.DbMap
 import jdbc.DbValue
-import lang.Email
+import common.lang.Email
+import common.meta.*
 import sql.ColumnDef
 import sql.Primary
 import sql.int
 import sql.varchar
 import java.util.*
-import json.*
-import kotlin.collections.LinkedHashMap
 
 
 class SqlFieldMeta<X : Any, T : Type<X>>(
@@ -97,12 +96,12 @@ fun <E : Any, E_ : Any> sqlFieldMeta(entityField: EntityField<E, E_, *, *>): Sql
             toDbMap = {
                 mapOf(
                     columnDef.name to DbValue(
-                        toJson(it, field.type as ComplexType<*, *>)
+                        complexTypeToJson(it as Any, field.type as ComplexType<Any, Any>)
                     )
                 )
             },
             fromDbMap = {
-                fromJSon(
+                complexTypeFromJSon(
                     it.get(columnDef.name)?.asString() ?: throw Exception(),
                     field.type as ComplexType<*, *>
                 )

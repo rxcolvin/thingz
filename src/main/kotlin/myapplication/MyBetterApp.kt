@@ -1,8 +1,8 @@
 package myapplication
 
 import application.Application
+import common.entities.PersonType
 import jdbc.DerbyJdbcHelper
-import sql.DerbySqlHelper
 
 
 fun main() {

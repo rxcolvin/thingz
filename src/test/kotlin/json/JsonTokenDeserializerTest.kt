@@ -1,5 +1,6 @@
 package json
 
+import common.json.JsonTokenDeserializer
 import org.junit.jupiter.api.Test
 
 internal class JsonTokenDeserializerTest {
@@ -7,7 +8,8 @@ internal class JsonTokenDeserializerTest {
     val target = JsonTokenDeserializer(
         """{
             "foo": "bar"
-        }""")
+        }"""
+    )
 
     @Test
     fun one() {

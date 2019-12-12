@@ -1,4 +1,4 @@
-package lang
+package common.lang
 
 data class Email(
     val name: String,
@@ -9,6 +9,10 @@ data class Email(
 
 data class JSON(
     val json: String
+)
+
+data class Uuid(
+    val uuid: String
 )
 
 

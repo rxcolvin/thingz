@@ -6,12 +6,12 @@ import expression.Parameter
 import jdbc.Connection
 import jdbc.DbMap
 import jdbc.DbMapBuilder
-import meta.*
-import query.QueryDef
+import common.meta.*
+import common.query.QueryDef
 import sql.SqlHelper
 import sql.SqlStatement
 import sql.Table
-import storage.StorageManager
+import common.storage.StorageManager
 
 
 /**
@@ -84,11 +84,13 @@ class SimpleJdbcStorageManager<K : Any, E : Any, E_ : Any>(
             preparedStatement.execute()
         }
 
+        //TODO: Proper exception
         fun execute(dbMap: DbMap) =
             preparedStatement.execute(sqlStatement.parameters.map { dbMap.getOrElse(it, { throw Exception() }) })
 
 
-        fun executeQuery(dbMap: DbMap): Sequence<DbMap> =
+        //TODO: Proper exception
+        fun executeQuery(dbMap: DbMap = emptyMap()): Sequence<DbMap> =
             preparedStatement.executeQuery(
                 sqlStatement.parameters.map {
                     dbMap.getOrElse(
@@ -117,6 +119,13 @@ class SimpleJdbcStorageManager<K : Any, E : Any, E_ : Any>(
             )
         )
     )
+
+    val queryAllStatement = PreparedStatementHolder(
+        sqlHelper.selectSql(
+            table = sqlMapper.table
+        )
+    )
+
 
     override fun describeSchema(): String = "???"
 
@@ -154,11 +163,17 @@ class SimpleJdbcStorageManager<K : Any, E : Any, E_ : Any>(
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
 
-    override fun query(filter: QueryDef): Sequence<E> {
+    override fun query(filter: QueryDef<E>): Sequence<E> {
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
 
-    override fun deleteQuery(filter: QueryDef) {
+    override fun queryAll(): Sequence<E> =
+        queryAllStatement.executeQuery().map {
+            sqlMapper.fromMap(it)
+        }
+
+
+    override fun deleteQuery(filter: QueryDef<E>) {
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
 

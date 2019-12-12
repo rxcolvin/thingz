@@ -28,7 +28,7 @@ dependencies {
     compile group: "org.http4k", name: "http4k-server-jetty", version: "3.189.0"
     compile group: "org.http4k", name: "http4k-client-apache", version: "3.189.0"
     compile group: "org.http4k", name: "http4k-server-ktorcio", version: "3.189.0"
-
+    compile group: 'com.ibm.icu', name: 'icu4j', version: '65.1'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
     implementation group: 'org.apache.derby', name: 'derby', version: '10.14.2.0'
 

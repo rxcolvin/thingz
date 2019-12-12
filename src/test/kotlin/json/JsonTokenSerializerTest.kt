@@ -1,5 +1,6 @@
 package json
 
+import common.json.JsonTokenSerializer
 import org.junit.jupiter.api.Test
 
 internal class JsonTokenSerializerTest {
