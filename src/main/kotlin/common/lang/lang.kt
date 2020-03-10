@@ -1,5 +1,7 @@
 package common.lang
 
+import kotlin.reflect.KClass
+
 data class Email(
     val name: String,
     val domain: String
@@ -13,6 +15,11 @@ data class JSON(
 
 data class Uuid(
     val uuid: String
+)
+
+data class Ref<T: Any> (
+    val foreignKey : T,
+    val typeName: String
 )
 
 

@@ -1,5 +1,6 @@
 package common.json
 
+import java.math.BigInteger
 import kotlin.NumberFormatException
 
 typealias JsonMap = Map<String, Any?>
@@ -278,7 +279,6 @@ class JsonTokenDeserializer(
                     next()
                 } else if (head == '+' && !allowPlusSign) {
                     exception("Numbers can't start with '+'" )
-                    next()
                 }
             } else {
                 first = false
@@ -300,8 +300,8 @@ class JsonTokenDeserializer(
         return if (hasDP) {
             sb.toString().toDouble()
         }  else {
-            sb.toString().toLong()
-        }
+            sb.toString().toBigInteger()
+     }
     }
 
     fun boolean(): Boolean {
@@ -458,6 +458,23 @@ fun <T : TokenSerializer> listUnparser(t: T, list: List<Any?>) {
         closeList()
     }
 }
+
+/**
+ * Fit a BigInteger to a given type
+ */
+fun BigInteger.fit() : Number =
+    try {
+        intValueExact()
+    } catch (e: ArithmeticException) {
+        try {
+            longValueExact()
+        } catch (e: ArithmeticException ) {
+            this
+        }
+    }
+
+
+
 
 
 

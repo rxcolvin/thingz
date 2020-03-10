@@ -7,6 +7,7 @@ import jdbc.Connection
 import jdbc.DbMap
 import jdbc.DbMapBuilder
 import common.meta.*
+import common.query.FilterQueryDef
 import common.query.QueryDef
 import sql.SqlHelper
 import sql.SqlStatement
@@ -163,9 +164,13 @@ class SimpleJdbcStorageManager<K : Any, E : Any, E_ : Any>(
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
 
-    override fun query(filter: QueryDef<E>): Sequence<E> {
+    override fun query(queryDef: QueryDef<E>): Sequence<E> {
+        if (queryDef is FilterQueryDef<E>) {
+            return queryAll().filter(queryDef.filter)
+        }
         TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
     }
+
 
     override fun queryAll(): Sequence<E> =
         queryAllStatement.executeQuery().map {

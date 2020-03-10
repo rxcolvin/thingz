@@ -1,2 +1,5 @@
 rootProject.name = 'thingz'
 
+enableFeaturePreview('GRADLE_METADATA')
+
+

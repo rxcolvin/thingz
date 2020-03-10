@@ -12,11 +12,6 @@ interface Type<T : Any> {
     val typeName: String
 }
 
-enum class AtomicJsonType {
-    STRING, NUMBER, BOOLEAN
-
-}
-
 
 class AtomicType<T : Any, J>(
     override val typeName: String,
@@ -123,6 +118,7 @@ val UUIDType = AtomicType<Uuid, String>(
     },
     toJson = { it.uuid }
 )
+
 
 class Field<X : Any, T : Type<X>>(
     val fieldName: String,

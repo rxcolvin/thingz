@@ -3,12 +3,12 @@ package jdbcstorage
 import jdbc.DbMap
 import jdbc.DbValue
 import common.lang.Email
+import common.lang.Uuid
 import common.meta.*
 import sql.ColumnDef
 import sql.Primary
 import sql.int
 import sql.varchar
-import java.util.*
 
 
 class SqlFieldMeta<X : Any, T : Type<X>>(
@@ -55,8 +55,8 @@ fun <E : Any, E_ : Any> sqlFieldMeta(entityField: EntityField<E, E_, *, *>): Sql
                     isPrimary = if (entityField.isKey) Primary.FIRST else Primary.NONE
                 )
                 SqlFieldMeta(
-                    toDbMap = { mapOf(columnDef.name to DbValue(it.toString())) },
-                    fromDbMap = { m -> UUID.fromString(m.get(columnDef.name)?.asString() ?: throw Exception()) },
+                    toDbMap = { mapOf(columnDef.name to DbValue( it.uuid)) },
+                    fromDbMap = { m -> Uuid(m.get(columnDef.name)?.asString() ?: throw Exception()) },
                     columnDefs = listOf(columnDef)
                 )
             }

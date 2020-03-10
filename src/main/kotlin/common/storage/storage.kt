@@ -4,14 +4,14 @@ import common.query.QueryDef
 
 interface QueryManager<K, E> {
   fun getById(id: K): E
-  fun query(filter: QueryDef<E>) : Sequence<E>
+  fun query(queryDef: QueryDef<E>) : Sequence<E>
   fun queryAll() : Sequence<E>
 }
 
 interface UpdateManager<K, E> {
   fun create(item: E)
   fun update(item: E)
-  fun deleteQuery(filter: QueryDef<E>)
+  fun deleteQuery(queryDef: QueryDef<E>)
   fun deleteById(id: K)
 }
 

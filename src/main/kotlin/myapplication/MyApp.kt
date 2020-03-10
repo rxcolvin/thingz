@@ -70,7 +70,7 @@ fun main() {
             }
         )
 
-        println(engine.app(Request(Method.GET, "/person/${person.uuid.toString()}")))
+        println(engine.app(Request(Method.GET, "/person/${person.uuid}")))
 
         engine.start()
 

@@ -7,6 +7,7 @@ import jdbcstorage.SimpleJdbcStorageManager
 import common.meta.EntityType
 import kotlin.concurrent.thread
 
+//Bound to JDBC so JVM Only
 class Application(
     val jdbcHelper: JdbcHelper,
     val assetTypes: List<EntityType<*, *, *>>
